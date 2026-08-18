@@ -30,8 +30,24 @@ function broadcastViewers(room) {
 }
 
 io.on('connection', (socket) => {
-  socket.on('host:create', (_payload, cb) => {
-    const code = generateCode();
+  socket.on('host:create', (payload, cb) => {
+    const requested = (payload && payload.customCode || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    let code;
+    if (requested) {
+      if (requested.length < 4 || requested.length > 12) {
+        cb({ error: 'O código deve ter entre 4 e 12 letras/números.' });
+        return;
+      }
+      if (rooms.has(requested)) {
+        cb({ error: 'Esse código já está em uso.' });
+        return;
+      }
+      code = requested;
+    } else {
+      code = generateCode();
+    }
+
     rooms.set(code, { hostId: socket.id, viewers: new Map() });
     socket.data.role = 'host';
     socket.data.code = code;

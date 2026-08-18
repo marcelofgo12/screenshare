@@ -32,6 +32,7 @@ const viewerView = document.getElementById('viewer-view');
 const btnHost = document.getElementById('btn-host');
 const btnJoin = document.getElementById('btn-join');
 const btnStartShare = document.getElementById('btn-start-share');
+const customCodeInput = document.getElementById('custom-code-input');
 const btnConnect = document.getElementById('btn-connect');
 const nameInput = document.getElementById('name-input');
 const codeInput = document.getElementById('code-input');
@@ -80,22 +81,34 @@ btnStartShare.onclick = async () => {
 };
 
 async function startSharing() {
+  const customCode = customCodeInput.value.trim();
+
+  const result = await new Promise((resolve) => {
+    socket.emit('host:create', { customCode }, resolve);
+  });
+
+  if (result.error) {
+    setStatus(result.error);
+    return;
+  }
+  const code = result.code;
+
   try {
     localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
     localVideo.srcObject = localStream;
   } catch (err) {
+    socket.emit('host:stop');
     setStatus('Não foi possível capturar a tela.');
     return;
   }
 
-  socket.emit('host:create', null, ({ code }) => {
-    codeDisplay.textContent = code;
-    setStatus('Aguardando espectadores entrarem com o código...');
-  });
+  codeDisplay.textContent = code;
+  setStatus('Aguardando espectadores entrarem com o código...');
 
   sharing = true;
   btnStartShare.textContent = 'Parar compartilhamento';
   btnStartShare.classList.add('btn-stop');
+  customCodeInput.disabled = true;
   renderViewers([]);
 
   localStream.getVideoTracks()[0].addEventListener('ended', () => {
@@ -123,6 +136,7 @@ function stopSharing() {
   renderViewers([]);
   btnStartShare.textContent = 'Iniciar compartilhamento';
   btnStartShare.classList.remove('btn-stop');
+  customCodeInput.disabled = false;
   setStatus('Compartilhamento encerrado.');
 }
 
