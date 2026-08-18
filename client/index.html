@@ -19,11 +19,14 @@
       <button id="btn-start-share">Iniciar compartilhamento</button>
       <p class="code-box">Código da sala: <strong id="code-display">------</strong></p>
       <video id="local-video" autoplay muted playsinline></video>
+      <p class="viewer-count">Assistindo: <strong id="viewer-count">0</strong></p>
+      <ul id="viewer-list" class="viewer-list"></ul>
     </div>
 
     <div id="viewer-view" class="view hidden">
       <h2>Entrar em uma sala</h2>
       <div class="join-row">
+        <input id="name-input" placeholder="Seu nome" maxlength="20" />
         <input id="code-input" placeholder="Código da sala" maxlength="6" autocapitalize="characters" />
         <button id="btn-connect">Conectar</button>
       </div>

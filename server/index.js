@@ -12,7 +12,7 @@ const io = new Server(server, {
   cors: { origin: '*' }
 });
 
-// code -> { hostId, viewers: Set<socketId> }
+// code -> { hostId, viewers: Map<socketId, name> }
 const rooms = new Map();
 
 function generateCode() {
@@ -24,28 +24,47 @@ function generateCode() {
   return code;
 }
 
+function broadcastViewers(room) {
+  const viewers = Array.from(room.viewers, ([id, name]) => ({ id, name }));
+  io.to(room.hostId).emit('viewers:update', viewers);
+}
+
 io.on('connection', (socket) => {
   socket.on('host:create', (_payload, cb) => {
     const code = generateCode();
-    rooms.set(code, { hostId: socket.id, viewers: new Set() });
+    rooms.set(code, { hostId: socket.id, viewers: new Map() });
     socket.data.role = 'host';
     socket.data.code = code;
     socket.join(code);
     cb({ code });
   });
 
-  socket.on('viewer:join', (code, cb) => {
+  socket.on('host:stop', () => {
+    if (socket.data.role !== 'host' || !socket.data.code) return;
+    const code = socket.data.code;
+    const room = rooms.get(code);
+    if (!room) return;
+    io.to(code).emit('host:left');
+    rooms.delete(code);
+    socket.leave(code);
+    socket.data.role = null;
+    socket.data.code = null;
+  });
+
+  socket.on('viewer:join', ({ code, name }, cb) => {
     const room = rooms.get(code);
     if (!room) {
       cb({ error: 'Codigo invalido ou sala encerrada.' });
       return;
     }
-    room.viewers.add(socket.id);
+    const viewerName = (name || '').trim().slice(0, 30) || 'Convidado';
+    room.viewers.set(socket.id, viewerName);
     socket.data.role = 'viewer';
     socket.data.code = code;
     socket.join(code);
     cb({ ok: true });
-    io.to(room.hostId).emit('viewer:new', { viewerId: socket.id });
+    io.to(room.hostId).emit('viewer:new', { viewerId: socket.id, name: viewerName });
+    broadcastViewers(room);
   });
 
   socket.on('signal:offer', ({ to, offer }) => {
@@ -72,6 +91,7 @@ io.on('connection', (socket) => {
     } else if (role === 'viewer') {
       room.viewers.delete(socket.id);
       io.to(room.hostId).emit('viewer:left', { viewerId: socket.id });
+      broadcastViewers(room);
     }
   });
 });

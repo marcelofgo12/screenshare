@@ -33,17 +33,31 @@ const btnHost = document.getElementById('btn-host');
 const btnJoin = document.getElementById('btn-join');
 const btnStartShare = document.getElementById('btn-start-share');
 const btnConnect = document.getElementById('btn-connect');
+const nameInput = document.getElementById('name-input');
 const codeInput = document.getElementById('code-input');
 const codeDisplay = document.getElementById('code-display');
 const localVideo = document.getElementById('local-video');
 const remoteVideo = document.getElementById('remote-video');
 const btnFullscreen = document.getElementById('btn-fullscreen');
+const viewerCountEl = document.getElementById('viewer-count');
+const viewerListEl = document.getElementById('viewer-list');
 const statusEl = document.getElementById('status');
 
 let localStream = null;
+let sharing = false;
 const peerConnections = new Map(); // viewerId -> RTCPeerConnection (lado host)
 let hostPeerConnection = null;     // lado viewer
 let hostId = null;
+
+function renderViewers(viewers) {
+  viewerCountEl.textContent = viewers.length;
+  viewerListEl.innerHTML = '';
+  viewers.forEach(({ name }) => {
+    const li = document.createElement('li');
+    li.textContent = name;
+    viewerListEl.appendChild(li);
+  });
+}
 
 function show(view) {
   [homeView, hostView, viewerView].forEach((v) => v.classList.add('hidden'));
@@ -58,6 +72,14 @@ btnHost.onclick = () => show(hostView);
 btnJoin.onclick = () => show(viewerView);
 
 btnStartShare.onclick = async () => {
+  if (!sharing) {
+    await startSharing();
+  } else {
+    stopSharing();
+  }
+};
+
+async function startSharing() {
   try {
     localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
     localVideo.srcObject = localStream;
@@ -71,12 +93,38 @@ btnStartShare.onclick = async () => {
     setStatus('Aguardando espectadores entrarem com o código...');
   });
 
+  sharing = true;
+  btnStartShare.textContent = 'Parar compartilhamento';
+  btnStartShare.classList.add('btn-stop');
+  renderViewers([]);
+
   localStream.getVideoTracks()[0].addEventListener('ended', () => {
-    setStatus('Compartilhamento encerrado.');
-    peerConnections.forEach((pc) => pc.close());
-    peerConnections.clear();
+    // usuário parou pela barra nativa do navegador, não pelo nosso botão
+    stopSharing();
   });
-};
+}
+
+function stopSharing() {
+  if (!sharing) return;
+  sharing = false;
+
+  if (localStream) {
+    localStream.getTracks().forEach((track) => track.stop());
+    localStream = null;
+  }
+  localVideo.srcObject = null;
+
+  peerConnections.forEach((pc) => pc.close());
+  peerConnections.clear();
+
+  socket.emit('host:stop');
+
+  codeDisplay.textContent = '------';
+  renderViewers([]);
+  btnStartShare.textContent = 'Iniciar compartilhamento';
+  btnStartShare.classList.remove('btn-stop');
+  setStatus('Compartilhamento encerrado.');
+}
 
 // ----- Lado HOST: um novo espectador entrou -----
 socket.on('viewer:new', async ({ viewerId }) => {
@@ -110,11 +158,16 @@ socket.on('viewer:left', ({ viewerId }) => {
   }
 });
 
+socket.on('viewers:update', (viewers) => {
+  renderViewers(viewers);
+});
+
 // ----- Lado VIEWER: entrar com código -----
 btnConnect.onclick = () => {
   const code = codeInput.value.trim().toUpperCase();
+  const name = nameInput.value.trim() || 'Convidado';
   if (!code) return;
-  socket.emit('viewer:join', code, (res) => {
+  socket.emit('viewer:join', { code, name }, (res) => {
     if (res.error) {
       setStatus(res.error);
     } else {

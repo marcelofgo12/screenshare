@@ -60,6 +60,14 @@ button:hover {
   background: #3c56e0;
 }
 
+button.btn-stop {
+  background: #e14545;
+}
+
+button.btn-stop:hover {
+  background: #c53030;
+}
+
 input {
   background: #1c1f27;
   border: 1px solid #333849;
@@ -76,6 +84,37 @@ input {
 .join-row {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.viewer-count {
+  margin: 0;
+  font-size: 15px;
+  color: #9aa0ac;
+}
+
+.viewer-count strong {
+  color: #e8e8ec;
+}
+
+.viewer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.viewer-list li {
+  background: #1c1f27;
+  border: 1px solid #333849;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  color: #c7cbd4;
 }
 
 .code-box {
