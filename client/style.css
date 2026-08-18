@@ -1,0 +1,93 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #111318;
+  color: #e8e8ec;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+main {
+  width: 100%;
+  max-width: 640px;
+}
+
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  text-align: center;
+}
+
+.hidden {
+  display: none;
+}
+
+h1, h2 {
+  margin: 0 0 8px;
+}
+
+button {
+  background: #4f6bff;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  min-width: 220px;
+}
+
+button:hover {
+  background: #3c56e0;
+}
+
+input {
+  background: #1c1f27;
+  border: 1px solid #333849;
+  color: #e8e8ec;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 18px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  width: 160px;
+  text-align: center;
+}
+
+.join-row {
+  display: flex;
+  gap: 10px;
+}
+
+.code-box {
+  font-size: 18px;
+}
+
+.code-box strong {
+  font-size: 24px;
+  letter-spacing: 4px;
+  color: #7d93ff;
+}
+
+video {
+  width: 100%;
+  max-width: 600px;
+  border-radius: 10px;
+  background: #000;
+}
+
+#status {
+  margin-top: 20px;
+  min-height: 20px;
+  color: #9aa0ac;
+  text-align: center;
+}
