@@ -1,5 +1,5 @@
 // >>> Troque pela URL do seu servidor no Render depois do deploy <<<
-const SIGNALING_URL = 'https://SEU-APP.onrender.com';
+const SIGNALING_URL = 'https://screenshare-ba36.onrender.com';
 
 // STUN/TURN público de demonstração (Open Relay Project).
 // Funciona para uso pessoal, mas tem limite de banda. Veja o passo a passo
