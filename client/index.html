@@ -11,6 +11,7 @@
     <div id="home" class="view">
       <h1>Compartilhamento de Tela</h1>
       <button id="btn-host">Compartilhar minha tela</button>
+      <button id="btn-voice-create">Criar sala de voz</button>
       <button id="btn-join">Entrar com código</button>
     </div>
 
@@ -24,17 +25,45 @@
       <ul id="viewer-list" class="viewer-list"></ul>
     </div>
 
-    <div id="viewer-view" class="view hidden">
+    <div id="voice-create-view" class="view hidden">
+      <h2>Criar sala de voz</h2>
+      <div class="join-row">
+        <input id="voice-name-input" placeholder="Seu nome" maxlength="20" />
+        <input id="voice-custom-code-input" placeholder="Código personalizado (opcional)" maxlength="12" autocapitalize="characters" />
+        <button id="btn-voice-create-confirm">Criar sala</button>
+      </div>
+    </div>
+
+    <div id="join-view" class="view hidden">
       <h2>Entrar em uma sala</h2>
       <div class="join-row">
         <input id="name-input" placeholder="Seu nome" maxlength="20" />
-        <input id="code-input" placeholder="Código da sala" maxlength="6" autocapitalize="characters" />
+        <input id="code-input" placeholder="Código da sala" maxlength="12" autocapitalize="characters" />
         <button id="btn-connect">Conectar</button>
       </div>
+    </div>
+
+    <div id="viewer-view" class="view hidden">
       <div class="video-wrap">
         <video id="remote-video" autoplay playsinline></video>
         <button id="btn-fullscreen" class="fullscreen-btn hidden">⛶ Tela cheia</button>
       </div>
+    </div>
+
+    <div id="voice-room-view" class="view hidden">
+      <h2>Sala de voz — <span id="voice-code-display">------</span></h2>
+      <p class="viewer-count">Participantes: <strong id="voice-participant-count">0</strong></p>
+      <ul id="voice-participant-list" class="viewer-list"></ul>
+      <div class="voice-controls">
+        <button id="btn-mic-toggle">Mutar microfone</button>
+        <button id="btn-voice-share">Compartilhar minha tela</button>
+        <button id="btn-voice-leave">Sair da sala</button>
+      </div>
+      <div id="voice-video-wrap" class="video-wrap hidden">
+        <video id="voice-remote-video" autoplay playsinline></video>
+        <button id="btn-voice-fullscreen" class="fullscreen-btn hidden">⛶ Tela cheia</button>
+      </div>
+      <div id="remote-audio-container" class="hidden"></div>
     </div>
 
     <p id="status"></p>
