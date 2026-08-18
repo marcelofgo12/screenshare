@@ -37,6 +37,7 @@ const codeInput = document.getElementById('code-input');
 const codeDisplay = document.getElementById('code-display');
 const localVideo = document.getElementById('local-video');
 const remoteVideo = document.getElementById('remote-video');
+const btnFullscreen = document.getElementById('btn-fullscreen');
 const statusEl = document.getElementById('status');
 
 let localStream = null;
@@ -128,6 +129,8 @@ socket.on('signal:offer', async ({ from, offer }) => {
 
   hostPeerConnection.ontrack = (e) => {
     remoteVideo.srcObject = e.streams[0];
+    document.body.classList.add('watching');
+    btnFullscreen.classList.remove('hidden');
     setStatus('Recebendo transmissão.');
   };
 
@@ -155,7 +158,17 @@ socket.on('signal:ice', async ({ from, candidate }) => {
   }
 });
 
+btnFullscreen.onclick = () => {
+  if (remoteVideo.requestFullscreen) {
+    remoteVideo.requestFullscreen();
+  } else if (remoteVideo.webkitRequestFullscreen) {
+    remoteVideo.webkitRequestFullscreen();
+  }
+};
+
 socket.on('host:left', () => {
   setStatus('O host encerrou o compartilhamento.');
   remoteVideo.srcObject = null;
+  document.body.classList.remove('watching');
+  btnFullscreen.classList.add('hidden');
 });

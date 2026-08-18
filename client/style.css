@@ -12,11 +12,21 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px;
+  transition: padding 0.2s ease;
 }
 
 main {
   width: 100%;
   max-width: 640px;
+  transition: max-width 0.2s ease;
+}
+
+body.watching {
+  padding: 12px;
+}
+
+body.watching main {
+  max-width: 96vw;
 }
 
 .view {
@@ -83,6 +93,40 @@ video {
   max-width: 600px;
   border-radius: 10px;
   background: #000;
+  transition: max-width 0.2s ease, max-height 0.2s ease;
+}
+
+.video-wrap {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+body.watching .video-wrap video {
+  max-width: 96vw;
+  max-height: 82vh;
+  width: auto;
+  object-fit: contain;
+}
+
+body.watching .join-row {
+  display: none;
+}
+
+.fullscreen-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  min-width: auto;
+  padding: 8px 14px;
+  font-size: 14px;
+  background: rgba(20, 22, 28, 0.75);
+  border: 1px solid #333849;
+}
+
+.fullscreen-btn:hover {
+  background: rgba(79, 107, 255, 0.85);
 }
 
 #status {
