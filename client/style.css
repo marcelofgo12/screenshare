@@ -21,6 +21,13 @@
   box-sizing: border-box;
 }
 
+/* .hidden precisa vencer qualquer outra regra de "display" que uma classe
+   vizinha declare (ex: .chat-panel { display: flex }), independente da
+   ordem em que aparecem neste arquivo — por isso o !important aqui. */
+.hidden {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -113,6 +120,44 @@ body.watching main.card {
   color: var(--text-muted);
 }
 
+/* ----- Status de login do Google (no cabeçalho) ----- */
+
+.google-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 6px 10px 6px 6px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.google-status-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.google-logout-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  min-width: auto;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.google-logout-btn:hover {
+  background: none;
+  color: var(--text);
+}
+
 main.card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -127,10 +172,6 @@ main.card {
   display: flex;
   flex-direction: column;
   gap: 18px;
-}
-
-.hidden {
-  display: none;
 }
 
 h1, h2 {
@@ -150,6 +191,29 @@ h2 {
   font-weight: 600;
   color: var(--accent);
   letter-spacing: 2px;
+}
+
+/* ----- Portão de login (primeira tela) ----- */
+
+.gate-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 24px 0;
+}
+
+.gate-icon {
+  font-size: 48px;
+}
+
+.gate-content h2 {
+  justify-content: center;
+}
+
+.gate-content .google-btn-slot {
+  margin-top: 14px;
 }
 
 /* ----- Botões ----- */
@@ -254,6 +318,79 @@ button.btn-stop:hover {
   font-weight: 400;
 }
 
+/* ----- Salas ativas (lobby) ----- */
+
+.lobby-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lobby-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lobby-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  font-size: 13.5px;
+}
+
+.lobby-item:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.lobby-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.lobby-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.lobby-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobby-type {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lobby-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+  padding: 2px;
+}
+
+.lobby-list:not(:empty) + .lobby-empty {
+  display: none;
+}
+
 /* ----- Campos de formulário ----- */
 
 .field {
@@ -296,6 +433,15 @@ input.input-code {
   letter-spacing: 2px;
 }
 
+.join-context {
+  margin: 0;
+  font-size: 13px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+
 /* ----- Código da sala em destaque ----- */
 
 .code-card {
@@ -323,7 +469,7 @@ input.input-code {
   color: var(--accent);
 }
 
-/* ----- Listas de participantes ----- */
+/* ----- Listas de participantes (avatares, igual ao chat) ----- */
 
 .participants-box {
   display: flex;
@@ -356,38 +502,27 @@ input.input-code {
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .viewer-list li {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 6px 12px 6px 10px;
-  font-size: 13px;
-  color: var(--text);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: default;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.viewer-list li::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  flex-shrink: 0;
-  transition: background 0.15s ease, box-shadow 0.15s ease;
+.viewer-list li .chat-avatar {
+  width: 100%;
+  height: 100%;
+  font-size: 15px;
 }
 
 .viewer-list li.speaking {
   border-color: var(--success);
-}
-
-.viewer-list li.speaking::before {
-  background: var(--success);
-  box-shadow: 0 0 6px var(--success);
+  box-shadow: 0 0 8px var(--success);
 }
 
 /* ----- Vídeo ----- */
@@ -400,7 +535,6 @@ video {
   background: #000;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
   margin: 0 auto;
-  transition: max-width 0.2s ease, max-height 0.2s ease;
 }
 
 .video-wrap {
@@ -508,14 +642,48 @@ body.watching .video-wrap video {
   flex-direction: column;
   overflow: hidden;
   height: min(70vh, 620px);
+  transition: height 0.15s ease;
+}
+
+.chat-panel.minimized {
+  height: auto;
 }
 
 .chat-header {
-  padding: 16px 18px;
+  padding: 14px 10px 14px 18px;
   border-bottom: 1px solid var(--border);
   font-weight: 700;
   font-size: 14px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-minimize-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  min-width: auto;
+  padding: 4px 10px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.chat-minimize-btn:hover {
+  background: none;
+  color: var(--text);
+}
+
+.chat-collapsible {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-panel.minimized .chat-collapsible {
+  display: none;
 }
 
 .chat-messages {

@@ -31,9 +31,6 @@ const SCREEN_CONSTRAINTS = {
   audio: true
 };
 
-// >>> Cole aqui o Client ID do Google (Google Cloud Console > OAuth) para
-// habilitar o botão "Continuar com Google". Enquanto estiver com o valor
-// padrão abaixo, o botão simplesmente não aparece.
 const GOOGLE_CLIENT_ID = '1050161941044-bq1252g2hh4rdqbu92ftjtp0sn3c3cdl.apps.googleusercontent.com';
 
 const socket = io(SIGNALING_URL);
@@ -83,6 +80,7 @@ function playLeaveSound() {
 }
 
 // ----- Elementos: navegação -----
+const loginGateView = document.getElementById('login-gate');
 const homeView = document.getElementById('home');
 const hostView = document.getElementById('host-view');
 const voiceCreateView = document.getElementById('voice-create-view');
@@ -96,7 +94,7 @@ const btnJoin = document.getElementById('btn-join');
 const statusEl = document.getElementById('status');
 
 function show(view) {
-  [homeView, hostView, voiceCreateView, joinView, viewerView, voiceRoomView].forEach((v) =>
+  [loginGateView, homeView, hostView, voiceCreateView, joinView, viewerView, voiceRoomView].forEach((v) =>
     v.classList.add('hidden')
   );
   view.classList.remove('hidden');
@@ -153,15 +151,42 @@ if (isIOS && !(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)
   iosWarning.classList.remove('hidden');
 }
 
+// ----- Ajusta o vídeo pra sempre caber na tela, sem precisar de scroll -----
+function fitVideoToViewport(videoEl) {
+  if (!videoEl) return;
+  requestAnimationFrame(() => {
+    if (videoEl.offsetParent === null) return; // está escondido agora
+    const rect = videoEl.getBoundingClientRect();
+    const available = window.innerHeight - rect.top - 20;
+    if (available > 120) {
+      videoEl.style.maxHeight = available + 'px';
+    }
+  });
+}
+
+function fitActiveVideos() {
+  if (!viewerView.classList.contains('hidden')) fitVideoToViewport(remoteVideo);
+  if (!voiceRoomView.classList.contains('hidden')) fitVideoToViewport(voiceRemoteVideo);
+}
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(fitActiveVideos, 120);
+});
+
 // ----- Chat de texto — painel embutido estilo canal de texto (disponível durante -----
 // ----- compartilhamento simples e sala de voz) -----
 const chatPanel = document.getElementById('chat-panel');
 const chatMessages = document.getElementById('chat-messages');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
+const btnChatMinimize = document.getElementById('btn-chat-minimize');
 
 function showChatPanel() {
   chatPanel.classList.remove('hidden');
+  chatPanel.classList.remove('minimized');
+  btnChatMinimize.textContent = '－';
   document.body.classList.add('chat-active');
 }
 
@@ -170,6 +195,11 @@ function hideChatPanel() {
   document.body.classList.remove('chat-active');
   chatMessages.innerHTML = '';
 }
+
+btnChatMinimize.onclick = () => {
+  const minimized = chatPanel.classList.toggle('minimized');
+  btnChatMinimize.textContent = minimized ? '＋' : '－';
+};
 
 chatForm.onsubmit = (e) => {
   e.preventDefault();
@@ -196,7 +226,7 @@ function buildAvatar(name, avatarUrl) {
   }
   const div = document.createElement('div');
   div.className = 'chat-avatar chat-avatar-fallback';
-  div.style.background = colorFromName(name);
+  div.style.background = colorFromName(name || '');
   div.textContent = (name || '?').trim().charAt(0).toUpperCase();
   return div;
 }
@@ -235,9 +265,54 @@ socket.on('chat:message', ({ from, name, avatar, text, at }) => {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 });
 
-// ----- "Continuar com Google" (Google Identity Services, sem backend próprio) -----
+// ----- Login com Google (Google Identity Services, sem backend próprio) -----
+const googleStatusEl = document.getElementById('google-status');
+const googleStatusAvatar = document.getElementById('google-status-avatar');
+const googleStatusName = document.getElementById('google-status-name');
+const btnGoogleLogout = document.getElementById('btn-google-logout');
+
+const GOOGLE_PROFILE_KEY = 'screenshare_google_profile';
 let googleProfile = null; // { name, avatar }
-let activeNameInput = null;
+
+function getSavedGoogleProfile() {
+  try {
+    const raw = localStorage.getItem(GOOGLE_PROFILE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function saveGoogleProfile(profile) {
+  try {
+    localStorage.setItem(GOOGLE_PROFILE_KEY, JSON.stringify(profile));
+  } catch (err) {
+    // sem problema, só não lembra na próxima visita
+  }
+}
+
+function clearGoogleProfile() {
+  try {
+    localStorage.removeItem(GOOGLE_PROFILE_KEY);
+  } catch (err) {
+    // ignora
+  }
+}
+
+function updateGoogleStatusUI() {
+  if (googleProfile) {
+    googleStatusEl.classList.remove('hidden');
+    googleStatusName.textContent = `Conectado como ${googleProfile.name}`;
+    if (googleProfile.avatar) {
+      googleStatusAvatar.src = googleProfile.avatar;
+      googleStatusAvatar.classList.remove('hidden');
+    } else {
+      googleStatusAvatar.classList.add('hidden');
+    }
+  } else {
+    googleStatusEl.classList.add('hidden');
+  }
+}
 
 function decodeGoogleJwt(token) {
   const payload = token.split('.')[1];
@@ -253,39 +328,99 @@ function decodeGoogleJwt(token) {
 function handleGoogleCredential(response) {
   const payload = decodeGoogleJwt(response.credential);
   googleProfile = { name: payload.name || payload.given_name || 'Convidado', avatar: payload.picture || null };
-  if (activeNameInput) activeNameInput.value = googleProfile.name;
+  saveGoogleProfile(googleProfile);
+  saveName(googleProfile.name);
+  nameInput.value = googleProfile.name;
+  voiceNameInput.value = googleProfile.name;
+  updateGoogleStatusUI();
+  enterApp();
 }
 
-function setupGoogleButtons() {
-  if (GOOGLE_CLIENT_ID.startsWith('SEU_CLIENT_ID')) return;
+function setupGoogleButton() {
+  const slot = document.getElementById('gate-google-btn');
+  if (!slot || GOOGLE_CLIENT_ID.startsWith('SEU_CLIENT_ID')) return;
   if (!window.google || !window.google.accounts || !window.google.accounts.id) return;
 
   window.google.accounts.id.initialize({
     client_id: GOOGLE_CLIENT_ID,
     callback: handleGoogleCredential
   });
-
-  ['join-google-btn', 'voice-google-btn'].forEach((slotId) => {
-    const slot = document.getElementById(slotId);
-    if (!slot) return;
-    window.google.accounts.id.renderButton(slot, {
-      theme: 'filled_black',
-      size: 'large',
-      text: 'continue_with',
-      shape: 'pill'
-    });
+  window.google.accounts.id.renderButton(slot, {
+    theme: 'filled_black',
+    size: 'large',
+    text: 'continue_with',
+    shape: 'pill'
   });
 }
 
-window.addEventListener('load', setupGoogleButtons);
+window.addEventListener('load', setupGoogleButton);
+
+btnGoogleLogout.onclick = () => {
+  stopSharing(); // não faz nada se não houver compartilhamento ativo
+  if (myId) btnVoiceLeave.onclick(); // estava numa sala de voz
+  if (hostPeerConnection) btnLeaveViewer.onclick(); // estava assistindo um compartilhamento
+
+  googleProfile = null;
+  clearGoogleProfile();
+  updateGoogleStatusUI();
+  show(loginGateView);
+};
+
+function enterApp() {
+  show(homeView);
+}
+
+// ----- Salas ativas (lobby) -----
+const lobbyListEl = document.getElementById('lobby-list');
+const lobbyCountEl = document.getElementById('lobby-count');
+const lobbyEmptyEl = document.getElementById('lobby-empty');
+const joinContextEl = document.getElementById('join-context');
+
+function renderLobby(roomsList) {
+  lobbyCountEl.textContent = roomsList.length;
+  lobbyListEl.innerHTML = '';
+  lobbyEmptyEl.classList.toggle('hidden', roomsList.length > 0);
+
+  roomsList.forEach((room) => {
+    const li = document.createElement('li');
+    li.className = 'lobby-item';
+
+    const icon = document.createElement('span');
+    icon.className = 'lobby-icon';
+    icon.textContent = room.type === 'voice' ? '🎙️' : '🖥️';
+
+    const info = document.createElement('div');
+    info.className = 'lobby-info';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'lobby-name';
+    nameEl.textContent = room.name;
+    const typeEl = document.createElement('div');
+    typeEl.className = 'lobby-type';
+    typeEl.textContent = room.type === 'voice' ? 'Sala de voz' : 'Compartilhamento de tela';
+    info.appendChild(nameEl);
+    info.appendChild(typeEl);
+
+    li.appendChild(icon);
+    li.appendChild(info);
+    li.onclick = () => openJoinFromLobby(room);
+    lobbyListEl.appendChild(li);
+  });
+}
+
+socket.on('lobby:update', renderLobby);
+
+function openJoinFromLobby(room) {
+  joinContextEl.textContent = `Entrando em "${room.name}" (${room.type === 'voice' ? 'sala de voz' : 'compartilhamento'})`;
+  joinContextEl.classList.remove('hidden');
+  show(joinView);
+  codeInput.focus();
+}
 
 btnHost.onclick = () => show(hostView);
-btnVoiceCreate.onclick = () => {
-  activeNameInput = voiceNameInput;
-  show(voiceCreateView);
-};
+btnVoiceCreate.onclick = () => show(voiceCreateView);
 btnJoin.onclick = () => {
-  activeNameInput = nameInput;
+  joinContextEl.classList.add('hidden');
+  joinContextEl.textContent = '';
   show(joinView);
 };
 
@@ -300,6 +435,7 @@ document.querySelectorAll('[data-back]').forEach((btn) => {
 // Compartilhamento simples (1 host -> N espectadores)
 // =====================================================================
 
+const roomNameInput = document.getElementById('room-name-input');
 const btnStartShare = document.getElementById('btn-start-share');
 const customCodeInput = document.getElementById('custom-code-input');
 const codeDisplay = document.getElementById('code-display');
@@ -314,9 +450,10 @@ const peerConnections = new Map(); // viewerId -> RTCPeerConnection (lado host)
 function renderViewers(viewers) {
   viewerCountEl.textContent = viewers.length;
   viewerListEl.innerHTML = '';
-  viewers.forEach(({ name }) => {
+  viewers.forEach(({ name, avatar }) => {
     const li = document.createElement('li');
-    li.textContent = name;
+    li.title = name;
+    li.appendChild(buildAvatar(name, avatar));
     viewerListEl.appendChild(li);
   });
 }
@@ -331,8 +468,9 @@ btnStartShare.onclick = async () => {
 
 async function startSharing() {
   const customCode = customCodeInput.value.trim();
+  const roomName = roomNameInput.value.trim();
 
-  const result = await emitAsync('host:create', { customCode });
+  const result = await emitAsync('host:create', { customCode, roomName });
   if (result.error) {
     setStatus(result.error, 'error');
     return;
@@ -355,6 +493,7 @@ async function startSharing() {
   btnStartShare.textContent = '⏹️ Parar compartilhamento';
   btnStartShare.classList.add('btn-stop');
   customCodeInput.disabled = true;
+  roomNameInput.disabled = true;
   renderViewers([]);
   showChatPanel();
 
@@ -384,6 +523,7 @@ function stopSharing() {
   btnStartShare.textContent = '🖥️ Iniciar compartilhamento';
   btnStartShare.classList.remove('btn-stop');
   customCodeInput.disabled = false;
+  roomNameInput.disabled = false;
   setStatus('Compartilhamento encerrado.');
   hideChatPanel();
 }
@@ -468,7 +608,7 @@ btnConnect.onclick = async () => {
     showChatPanel();
   } else if (result.type === 'voice') {
     show(voiceRoomView);
-    await enterVoiceRoom(code, name, result.id, result.participants, result.sharerId);
+    await enterVoiceRoom(code, name, avatar, result.id, result.participants, result.sharerId, result.roomName);
     showChatPanel();
   }
 };
@@ -509,6 +649,7 @@ socket.on('signal:offer', async ({ from, offer }) => {
     document.body.classList.add('watching');
     btnFullscreen.classList.remove('hidden');
     setStatus('Recebendo transmissão.', 'success');
+    fitVideoToViewport(remoteVideo);
   };
 
   hostPeerConnection.onicecandidate = (e) => {
@@ -568,9 +709,11 @@ socket.on('host:left', () => {
 // a anterior).
 // =====================================================================
 
+const voiceRoomNameInput = document.getElementById('voice-room-name-input');
 const voiceNameInput = document.getElementById('voice-name-input');
 const voiceCustomCodeInput = document.getElementById('voice-custom-code-input');
 const btnVoiceCreateConfirm = document.getElementById('btn-voice-create-confirm');
+const voiceRoomNameDisplay = document.getElementById('voice-room-name-display');
 const voiceCodeDisplay = document.getElementById('voice-code-display');
 const voiceParticipantCountEl = document.getElementById('voice-participant-count');
 const voiceParticipantListEl = document.getElementById('voice-participant-list');
@@ -647,21 +790,22 @@ voiceNameInput.value = getSavedName();
 btnVoiceCreateConfirm.onclick = async () => {
   const name = voiceNameInput.value.trim() || 'Convidado';
   const customCode = voiceCustomCodeInput.value.trim();
+  const roomName = voiceRoomNameInput.value.trim();
   saveName(name);
   const avatar = googleProfile && googleProfile.name === name ? googleProfile.avatar : null;
 
-  const result = await emitAsync('voice:create', { customCode, name, avatar });
+  const result = await emitAsync('voice:create', { customCode, roomName, name, avatar });
   if (result.error) {
     setStatus(result.error, 'error');
     return;
   }
 
   show(voiceRoomView);
-  await enterVoiceRoom(result.code, name, result.id, [], null);
+  await enterVoiceRoom(result.code, name, avatar, result.id, [], null, result.roomName);
   showChatPanel();
 };
 
-async function enterVoiceRoom(code, myName, id, participants, sharerId) {
+async function enterVoiceRoom(code, myName, myAvatar, id, participants, sharerId, roomName) {
   myId = id;
   currentSharerId = sharerId;
   isVoiceSharer = false;
@@ -675,8 +819,9 @@ async function enterVoiceRoom(code, myName, id, participants, sharerId) {
   btnMicToggle.classList.remove('btn-stop');
   updateShareButton();
 
+  voiceRoomNameDisplay.textContent = roomName || 'Sala de voz';
   voiceCodeDisplay.textContent = code;
-  renderVoiceParticipants([{ id: myId, name: myName }, ...participants]);
+  renderVoiceParticipants([{ id: myId, name: myName, avatar: myAvatar }, ...participants]);
   setStatus('Conectando ao microfone...');
   stopSpeakingLoop();
 
@@ -722,6 +867,7 @@ function createVoicePeerConnection(peerId) {
       voiceVideoWrap.classList.remove('hidden');
       btnVoiceFullscreen.classList.remove('hidden');
       document.body.classList.add('watching');
+      fitVideoToViewport(voiceRemoteVideo);
       e.track.addEventListener('ended', () => {
         if (currentSharerId === peerId) clearVoiceVideo();
       });
@@ -819,10 +965,11 @@ function renderVoiceParticipants(participants) {
   lastParticipants = participants;
   voiceParticipantCountEl.textContent = participants.length;
   voiceParticipantListEl.innerHTML = '';
-  participants.forEach(({ id, name }) => {
+  participants.forEach(({ id, name, avatar }) => {
     const li = document.createElement('li');
     const label = id === myId ? `${name} (você)` : name;
-    li.textContent = id === currentSharerId ? `🖥️ ${label}` : label;
+    li.title = id === currentSharerId ? `🖥️ ${label} (compartilhando)` : label;
+    li.appendChild(buildAvatar(name, avatar));
     li.classList.toggle('speaking', speakingIds.has(id));
     voiceParticipantListEl.appendChild(li);
   });
@@ -875,6 +1022,7 @@ async function startVoiceShare() {
   voiceVideoWrap.classList.remove('hidden');
   btnVoiceFullscreen.classList.remove('hidden');
   document.body.classList.add('watching');
+  fitVideoToViewport(voiceRemoteVideo);
   updateShareButton();
   setStatus('Compartilhando sua tela para a sala.');
 
@@ -982,3 +1130,23 @@ btnVoiceLeave.onclick = () => {
   hideChatPanel();
   show(homeView);
 };
+
+// =====================================================================
+// Inicialização: decide se mostra o portão de login ou vai direto pra home
+// =====================================================================
+
+(function initApp() {
+  const stored = getSavedGoogleProfile();
+  if (stored) {
+    googleProfile = stored;
+    updateGoogleStatusUI();
+    nameInput.value = stored.name;
+    voiceNameInput.value = stored.name;
+    enterApp();
+  } else if (GOOGLE_CLIENT_ID.startsWith('SEU_CLIENT_ID')) {
+    // sem Client ID configurado ainda: nao trava o uso do app
+    enterApp();
+  } else {
+    show(loginGateView);
+  }
+})();

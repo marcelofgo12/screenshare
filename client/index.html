@@ -22,11 +22,25 @@
         <h1>ScreenShare</h1>
         <p class="tagline">Compartilhamento de tela e chamadas de voz entre amigos</p>
       </div>
+      <div id="google-status" class="google-status hidden">
+        <img id="google-status-avatar" class="google-status-avatar hidden" alt="" />
+        <span id="google-status-name"></span>
+        <button id="btn-google-logout" type="button" class="google-logout-btn" title="Trocar de conta">🔓</button>
+      </div>
     </header>
 
     <div class="main-row">
       <main class="card">
-        <div id="home" class="view">
+        <div id="login-gate" class="view">
+          <div class="gate-content">
+            <span class="gate-icon">🖥️</span>
+            <h2>Bem-vindo ao ScreenShare</h2>
+            <p class="tagline">Entre com sua conta Google para continuar</p>
+            <div id="gate-google-btn" class="google-btn-slot"></div>
+          </div>
+        </div>
+
+        <div id="home" class="view hidden">
           <div id="ios-warning" class="ios-warning hidden">
             ⚠️ Pelo Safari no iPhone/iPad você só consegue assistir — compartilhar tela não é suportado nesse navegador.
           </div>
@@ -53,12 +67,22 @@
               </span>
             </button>
           </div>
+
+          <div class="lobby-box">
+            <p class="section-label">Salas ativas <span id="lobby-count" class="count-badge">0</span></p>
+            <ul id="lobby-list" class="lobby-list"></ul>
+            <p id="lobby-empty" class="lobby-empty">Nenhuma sala ativa no momento.</p>
+          </div>
         </div>
 
         <div id="host-view" class="view hidden">
           <button class="back-btn" data-back>← Voltar</button>
           <h2>🖥️ Compartilhar tela</h2>
 
+          <div class="field">
+            <label for="room-name-input">Nome do compartilhamento (opcional)</label>
+            <input id="room-name-input" placeholder="Ex: Aula de matemática" maxlength="40" />
+          </div>
           <div class="field">
             <label for="custom-code-input">Código personalizado (opcional)</label>
             <input id="custom-code-input" class="input-code" placeholder="EX: FAMILIA24" maxlength="12" autocapitalize="characters" />
@@ -83,8 +107,10 @@
           <button class="back-btn" data-back>← Voltar</button>
           <h2>🎙️ Criar sala de voz</h2>
 
-          <div id="voice-google-btn" class="google-btn-slot"></div>
-
+          <div class="field">
+            <label for="voice-room-name-input">Nome da sala (opcional)</label>
+            <input id="voice-room-name-input" placeholder="Ex: Galera do fim de semana" maxlength="40" />
+          </div>
           <div class="field">
             <label for="voice-name-input">Seu nome</label>
             <input id="voice-name-input" placeholder="Como te chamam?" maxlength="20" />
@@ -101,7 +127,7 @@
           <button class="back-btn" data-back>← Voltar</button>
           <h2>🔑 Entrar em uma sala</h2>
 
-          <div id="join-google-btn" class="google-btn-slot"></div>
+          <p id="join-context" class="join-context hidden"></p>
 
           <div class="field">
             <label for="name-input">Seu nome</label>
@@ -125,7 +151,7 @@
         </div>
 
         <div id="voice-room-view" class="view hidden">
-          <h2>🎙️ Sala de voz <span class="code-inline" id="voice-code-display">------</span></h2>
+          <h2>🎙️ <span id="voice-room-name-display">Sala de voz</span> <span class="code-inline" id="voice-code-display">------</span></h2>
 
           <div class="participants-box">
             <p class="section-label">Participantes <span id="voice-participant-count" class="count-badge">0</span></p>
@@ -151,12 +177,17 @@
       </main>
 
       <aside id="chat-panel" class="chat-panel hidden">
-        <div class="chat-header">💬 Chat</div>
-        <div id="chat-messages" class="chat-messages"></div>
-        <form id="chat-form" class="chat-form">
-          <input id="chat-input" placeholder="Escreva uma mensagem…" maxlength="500" autocomplete="off" />
-          <button type="submit">Enviar</button>
-        </form>
+        <div class="chat-header">
+          <span>💬 Chat</span>
+          <button id="btn-chat-minimize" type="button" class="chat-minimize-btn" title="Minimizar">－</button>
+        </div>
+        <div id="chat-collapsible" class="chat-collapsible">
+          <div id="chat-messages" class="chat-messages"></div>
+          <form id="chat-form" class="chat-form">
+            <input id="chat-input" placeholder="Escreva uma mensagem…" maxlength="500" autocomplete="off" />
+            <button type="submit">Enviar</button>
+          </form>
+        </div>
       </aside>
     </div>
   </div>

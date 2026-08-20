@@ -13,15 +13,22 @@ const io = new Server(server, {
 });
 
 // code -> room
-// share: { type: 'share', hostId, viewers: Map<socketId, { name, avatar }> }
-// voice: { type: 'voice', participants: Map<socketId, { name, avatar }>, sharerId: string|null }
+// share: { type: 'share', name, hostId, viewers: Map<socketId, { name, avatar }> }
+// voice: { type: 'voice', name, participants: Map<socketId, { name, avatar }>, sharerId: string|null }
 const rooms = new Map();
+const LOBBY = 'lobby';
 
 function makeIdentity(name, avatar) {
   return {
     name: (name || '').trim().slice(0, 30) || 'Convidado',
     avatar: typeof avatar === 'string' && avatar.startsWith('https://') ? avatar.slice(0, 500) : null
   };
+}
+
+function makeRoomName(name, type) {
+  const trimmed = (name || '').trim().slice(0, 40);
+  if (trimmed) return trimmed;
+  return type === 'voice' ? 'Sala sem nome' : 'Compartilhamento sem nome';
 }
 
 function generateCode() {
@@ -48,13 +55,21 @@ function resolveCode(customCode) {
 }
 
 function broadcastShareViewers(room) {
-  const viewers = Array.from(room.viewers, ([id, v]) => ({ id, name: v.name }));
+  const viewers = Array.from(room.viewers, ([id, v]) => ({ id, name: v.name, avatar: v.avatar }));
   io.to(room.hostId).emit('viewers:update', viewers);
 }
 
 function broadcastVoiceParticipants(code, room) {
-  const participants = Array.from(room.participants, ([id, v]) => ({ id, name: v.name }));
+  const participants = Array.from(room.participants, ([id, v]) => ({ id, name: v.name, avatar: v.avatar }));
   io.to(code).emit('voice:participants-update', { participants, sharerId: room.sharerId });
+}
+
+function getLobbyList() {
+  return Array.from(rooms, ([, r]) => ({ type: r.type, name: r.name }));
+}
+
+function broadcastLobby() {
+  io.to(LOBBY).emit('lobby:update', getLobbyList());
 }
 
 function leaveVoiceRoom(socket) {
@@ -72,6 +87,7 @@ function leaveVoiceRoom(socket) {
 
   if (room.participants.size === 0) {
     rooms.delete(code);
+    broadcastLobby();
   } else {
     socket.to(code).emit('voice:participant-left', { id: socket.id });
     if (wasSharer) io.to(code).emit('voice:share-stopped');
@@ -80,6 +96,9 @@ function leaveVoiceRoom(socket) {
 }
 
 io.on('connection', (socket) => {
+  socket.join(LOBBY);
+  socket.emit('lobby:update', getLobbyList());
+
   // ---- Compartilhamento simples (host/espectadores) ----
   socket.on('host:create', (payload, cb) => {
     const result = resolveCode(payload && payload.customCode);
@@ -88,11 +107,13 @@ io.on('connection', (socket) => {
       return;
     }
     const code = result.code;
-    rooms.set(code, { type: 'share', hostId: socket.id, viewers: new Map() });
+    const name = makeRoomName(payload && payload.roomName, 'share');
+    rooms.set(code, { type: 'share', name, hostId: socket.id, viewers: new Map() });
     socket.data.role = 'host';
     socket.data.code = code;
     socket.join(code);
     cb({ code });
+    broadcastLobby();
   });
 
   socket.on('host:stop', () => {
@@ -105,6 +126,7 @@ io.on('connection', (socket) => {
     socket.leave(code);
     socket.data.role = null;
     socket.data.code = null;
+    broadcastLobby();
   });
 
   // ---- Sala de voz (mesh, qualquer participante pode compartilhar tela) ----
@@ -115,12 +137,14 @@ io.on('connection', (socket) => {
       return;
     }
     const code = result.code;
+    const name = makeRoomName(payload && payload.roomName, 'voice');
     const identity = makeIdentity(payload && payload.name, payload && payload.avatar);
-    rooms.set(code, { type: 'voice', participants: new Map([[socket.id, identity]]), sharerId: null });
+    rooms.set(code, { type: 'voice', name, participants: new Map([[socket.id, identity]]), sharerId: null });
     socket.data.role = 'voice';
     socket.data.code = code;
     socket.join(code);
-    cb({ code, id: socket.id });
+    cb({ code, id: socket.id, roomName: name });
+    broadcastLobby();
   });
 
   socket.on('voice:share-start', (_payload, cb) => {
@@ -184,7 +208,7 @@ io.on('connection', (socket) => {
       socket.data.role = 'viewer';
       socket.data.code = code;
       socket.join(code);
-      cb({ ok: true, type: 'share' });
+      cb({ ok: true, type: 'share', roomName: room.name });
       io.to(room.hostId).emit('viewer:new', { viewerId: socket.id, name: identity.name });
       broadcastShareViewers(room);
       return;
@@ -192,13 +216,20 @@ io.on('connection', (socket) => {
 
     if (room.type === 'voice') {
       const identity = makeIdentity(name, avatar);
-      const existing = Array.from(room.participants, ([id, v]) => ({ id, name: v.name }));
+      const existing = Array.from(room.participants, ([id, v]) => ({ id, name: v.name, avatar: v.avatar }));
       room.participants.set(socket.id, identity);
       socket.data.role = 'voice';
       socket.data.code = code;
       socket.join(code);
-      cb({ ok: true, type: 'voice', id: socket.id, participants: existing, sharerId: room.sharerId });
-      socket.to(code).emit('voice:participant-joined', { id: socket.id, name: identity.name });
+      cb({
+        ok: true,
+        type: 'voice',
+        id: socket.id,
+        roomName: room.name,
+        participants: existing,
+        sharerId: room.sharerId
+      });
+      socket.to(code).emit('voice:participant-joined', { id: socket.id, name: identity.name, avatar: identity.avatar });
       broadcastVoiceParticipants(code, room);
     }
   });
@@ -265,6 +296,7 @@ io.on('connection', (socket) => {
       if (role === 'host') {
         io.to(code).emit('host:left');
         rooms.delete(code);
+        broadcastLobby();
       } else if (role === 'viewer') {
         room.viewers.delete(socket.id);
         io.to(room.hostId).emit('viewer:left', { viewerId: socket.id });
