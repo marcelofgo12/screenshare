@@ -139,6 +139,30 @@ io.on('connection', (socket) => {
 
   socket.on('voice:leave', () => leaveVoiceRoom(socket));
 
+  socket.on('viewer:leave', () => {
+    if (socket.data.role !== 'viewer' || !socket.data.code) return;
+    const code = socket.data.code;
+    const room = rooms.get(code);
+    if (!room || room.type !== 'share') return;
+    room.viewers.delete(socket.id);
+    socket.leave(code);
+    socket.data.role = null;
+    socket.data.code = null;
+    io.to(room.hostId).emit('viewer:left', { viewerId: socket.id });
+    broadcastShareViewers(room);
+  });
+
+  socket.on('viewer:reconnect', () => {
+    if (socket.data.role !== 'viewer' || !socket.data.code) return;
+    const room = rooms.get(socket.data.code);
+    if (!room || room.type !== 'share') return;
+    io.to(room.hostId).emit('viewer:reconnect-request', { viewerId: socket.id });
+  });
+
+  socket.on('vsignal:reconnect-request', ({ to }) => {
+    io.to(to).emit('vsignal:reconnect-request', { from: socket.id });
+  });
+
   // ---- Entrada unificada: cliente so sabe o codigo, servidor decide o tipo ----
   socket.on('room:join', ({ code, name }, cb) => {
     const room = rooms.get(code);

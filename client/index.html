@@ -3,71 +3,140 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Compartilhamento de Tela</title>
+<title>ScreenShare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main>
-    <div id="home" class="view">
-      <h1>Compartilhamento de Tela</h1>
-      <button id="btn-host">Compartilhar minha tela</button>
-      <button id="btn-voice-create">Criar sala de voz</button>
-      <button id="btn-join">Entrar com código</button>
-    </div>
-
-    <div id="host-view" class="view hidden">
-      <h2>Compartilhando</h2>
-      <input id="custom-code-input" placeholder="Código personalizado (opcional)" maxlength="12" autocapitalize="characters" />
-      <button id="btn-start-share">Iniciar compartilhamento</button>
-      <p class="code-box">Código da sala: <strong id="code-display">------</strong></p>
-      <video id="local-video" autoplay muted playsinline></video>
-      <p class="viewer-count">Assistindo: <strong id="viewer-count">0</strong></p>
-      <ul id="viewer-list" class="viewer-list"></ul>
-    </div>
-
-    <div id="voice-create-view" class="view hidden">
-      <h2>Criar sala de voz</h2>
-      <div class="join-row">
-        <input id="voice-name-input" placeholder="Seu nome" maxlength="20" />
-        <input id="voice-custom-code-input" placeholder="Código personalizado (opcional)" maxlength="12" autocapitalize="characters" />
-        <button id="btn-voice-create-confirm">Criar sala</button>
+  <div class="app-shell">
+    <header class="app-header">
+      <span class="brand-icon">🖥️</span>
+      <div>
+        <h1>ScreenShare</h1>
+        <p class="tagline">Compartilhamento de tela e chamadas de voz entre amigos</p>
       </div>
-    </div>
+    </header>
 
-    <div id="join-view" class="view hidden">
-      <h2>Entrar em uma sala</h2>
-      <div class="join-row">
-        <input id="name-input" placeholder="Seu nome" maxlength="20" />
-        <input id="code-input" placeholder="Código da sala" maxlength="12" autocapitalize="characters" />
-        <button id="btn-connect">Conectar</button>
+    <main class="card">
+      <div id="home" class="view">
+        <div class="option-grid">
+          <button id="btn-host" class="option-btn">
+            <span class="option-icon">🖥️</span>
+            <span class="option-text">
+              <span class="option-label">Compartilhar minha tela</span>
+              <span class="option-desc">Gere um código e transmita para quem quiser assistir</span>
+            </span>
+          </button>
+          <button id="btn-voice-create" class="option-btn">
+            <span class="option-icon">🎙️</span>
+            <span class="option-text">
+              <span class="option-label">Criar sala de voz</span>
+              <span class="option-desc">Chamada em grupo com compartilhamento de tela opcional</span>
+            </span>
+          </button>
+          <button id="btn-join" class="option-btn">
+            <span class="option-icon">🔑</span>
+            <span class="option-text">
+              <span class="option-label">Entrar com código</span>
+              <span class="option-desc">Já tem um código? Entre em uma sala existente</span>
+            </span>
+          </button>
+        </div>
       </div>
-    </div>
 
-    <div id="viewer-view" class="view hidden">
-      <div class="video-wrap">
-        <video id="remote-video" autoplay playsinline></video>
-        <button id="btn-fullscreen" class="fullscreen-btn hidden">⛶ Tela cheia</button>
-      </div>
-    </div>
+      <div id="host-view" class="view hidden">
+        <button class="back-btn" data-back>← Voltar</button>
+        <h2>🖥️ Compartilhar tela</h2>
 
-    <div id="voice-room-view" class="view hidden">
-      <h2>Sala de voz — <span id="voice-code-display">------</span></h2>
-      <p class="viewer-count">Participantes: <strong id="voice-participant-count">0</strong></p>
-      <ul id="voice-participant-list" class="viewer-list"></ul>
-      <div class="voice-controls">
-        <button id="btn-mic-toggle">Mutar microfone</button>
-        <button id="btn-voice-share">Compartilhar minha tela</button>
-        <button id="btn-voice-leave">Sair da sala</button>
-      </div>
-      <div id="voice-video-wrap" class="video-wrap hidden">
-        <video id="voice-remote-video" autoplay playsinline></video>
-        <button id="btn-voice-fullscreen" class="fullscreen-btn hidden">⛶ Tela cheia</button>
-      </div>
-      <div id="remote-audio-container" class="hidden"></div>
-    </div>
+        <div class="field">
+          <label for="custom-code-input">Código personalizado (opcional)</label>
+          <input id="custom-code-input" class="input-code" placeholder="EX: FAMILIA24" maxlength="12" autocapitalize="characters" />
+        </div>
 
-    <p id="status"></p>
-  </main>
+        <button id="btn-start-share" class="primary-btn">🖥️ Iniciar compartilhamento</button>
+
+        <div class="code-card">
+          <span class="code-label">Código da sala</span>
+          <strong id="code-display" class="code-value">------</strong>
+        </div>
+
+        <video id="local-video" autoplay muted playsinline></video>
+
+        <div class="participants-box">
+          <p class="section-label">Assistindo <span id="viewer-count" class="count-badge">0</span></p>
+          <ul id="viewer-list" class="viewer-list"></ul>
+        </div>
+      </div>
+
+      <div id="voice-create-view" class="view hidden">
+        <button class="back-btn" data-back>← Voltar</button>
+        <h2>🎙️ Criar sala de voz</h2>
+
+        <div class="field">
+          <label for="voice-name-input">Seu nome</label>
+          <input id="voice-name-input" placeholder="Como te chamam?" maxlength="20" />
+        </div>
+        <div class="field">
+          <label for="voice-custom-code-input">Código personalizado (opcional)</label>
+          <input id="voice-custom-code-input" class="input-code" placeholder="EX: GALERA24" maxlength="12" autocapitalize="characters" />
+        </div>
+
+        <button id="btn-voice-create-confirm" class="primary-btn">Criar sala</button>
+      </div>
+
+      <div id="join-view" class="view hidden">
+        <button class="back-btn" data-back>← Voltar</button>
+        <h2>🔑 Entrar em uma sala</h2>
+
+        <div class="field">
+          <label for="name-input">Seu nome</label>
+          <input id="name-input" placeholder="Como te chamam?" maxlength="20" />
+        </div>
+        <div class="field">
+          <label for="code-input">Código da sala</label>
+          <input id="code-input" class="input-code" placeholder="Código recebido" maxlength="12" autocapitalize="characters" />
+        </div>
+
+        <button id="btn-connect" class="primary-btn">Conectar</button>
+      </div>
+
+      <div id="viewer-view" class="view hidden">
+        <button class="back-btn" id="btn-leave-viewer">← Sair</button>
+        <div class="video-wrap">
+          <video id="remote-video" autoplay playsinline></video>
+          <button id="btn-reconnect" class="reconnect-btn">🔄 Reconectar</button>
+          <button id="btn-fullscreen" class="fullscreen-btn hidden">⛶ Tela cheia</button>
+        </div>
+      </div>
+
+      <div id="voice-room-view" class="view hidden">
+        <h2>🎙️ Sala de voz <span class="code-inline" id="voice-code-display">------</span></h2>
+
+        <div class="participants-box">
+          <p class="section-label">Participantes <span id="voice-participant-count" class="count-badge">0</span></p>
+          <ul id="voice-participant-list" class="viewer-list"></ul>
+        </div>
+
+        <div class="voice-controls">
+          <button id="btn-mic-toggle">🎙️ Mutar microfone</button>
+          <button id="btn-voice-share">🖥️ Compartilhar minha tela</button>
+          <button id="btn-voice-leave" class="btn-stop">🚪 Sair da sala</button>
+        </div>
+
+        <div id="voice-video-wrap" class="video-wrap hidden">
+          <video id="voice-remote-video" autoplay playsinline></video>
+          <button id="btn-voice-reconnect" class="reconnect-btn">🔄 Reconectar</button>
+          <button id="btn-voice-fullscreen" class="fullscreen-btn hidden">⛶ Tela cheia</button>
+        </div>
+
+        <div id="remote-audio-container" class="hidden"></div>
+      </div>
+
+      <p id="status"></p>
+    </main>
+  </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="app.js"></script>

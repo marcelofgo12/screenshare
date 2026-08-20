@@ -37,6 +37,46 @@ function emitAsync(event, payload) {
   return new Promise((resolve) => socket.emit(event, payload, resolve));
 }
 
+// ----- Avisos sonoros (gerados na hora, sem depender de nenhum arquivo externo) -----
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new Ctx();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function playTone(freq, duration, delay = 0, volume = 0.15) {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.value = volume;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const t = ctx.currentTime + delay;
+    osc.start(t);
+    osc.stop(t + duration);
+  } catch (err) {
+    console.error('Erro ao tocar aviso sonoro', err);
+  }
+}
+
+function playJoinSound() {
+  playTone(660, 0.12, 0);
+  playTone(880, 0.14, 0.1);
+}
+
+function playLeaveSound() {
+  playTone(660, 0.12, 0);
+  playTone(415, 0.18, 0.1);
+}
+
 // ----- Elementos: navegação -----
 const homeView = document.getElementById('home');
 const hostView = document.getElementById('host-view');
@@ -64,6 +104,13 @@ function setStatus(msg) {
 btnHost.onclick = () => show(hostView);
 btnVoiceCreate.onclick = () => show(voiceCreateView);
 btnJoin.onclick = () => show(joinView);
+
+document.querySelectorAll('[data-back]').forEach((btn) => {
+  btn.onclick = () => {
+    stopSharing(); // não faz nada se não houver compartilhamento ativo
+    show(homeView);
+  };
+});
 
 // =====================================================================
 // Compartilhamento simples (1 host -> N espectadores)
@@ -121,7 +168,7 @@ async function startSharing() {
   setStatus('Aguardando espectadores entrarem com o código...');
 
   sharing = true;
-  btnStartShare.textContent = 'Parar compartilhamento';
+  btnStartShare.textContent = '⏹️ Parar compartilhamento';
   btnStartShare.classList.add('btn-stop');
   customCodeInput.disabled = true;
   renderViewers([]);
@@ -149,14 +196,17 @@ function stopSharing() {
 
   codeDisplay.textContent = '------';
   renderViewers([]);
-  btnStartShare.textContent = 'Iniciar compartilhamento';
+  btnStartShare.textContent = '🖥️ Iniciar compartilhamento';
   btnStartShare.classList.remove('btn-stop');
   customCodeInput.disabled = false;
   setStatus('Compartilhamento encerrado.');
 }
 
-// ----- Lado HOST: um novo espectador entrou -----
-socket.on('viewer:new', async ({ viewerId }) => {
+// ----- Lado HOST: cria (ou recria) a conexão com um espectador -----
+async function createHostConnectionForViewer(viewerId) {
+  const existingPc = peerConnections.get(viewerId);
+  if (existingPc) existingPc.close();
+
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   peerConnections.set(viewerId, pc);
 
@@ -171,7 +221,18 @@ socket.on('viewer:new', async ({ viewerId }) => {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   socket.emit('signal:offer', { to: viewerId, offer });
+}
+
+socket.on('viewer:new', ({ viewerId }) => {
+  playJoinSound();
   setStatus('Espectador conectado.');
+  createHostConnectionForViewer(viewerId);
+});
+
+// espectador clicou em "Reconectar": refaz a conexão sem soar como uma entrada nova
+socket.on('viewer:reconnect-request', ({ viewerId }) => {
+  setStatus('Reconectando espectador...');
+  createHostConnectionForViewer(viewerId);
 });
 
 socket.on('signal:answer', async ({ from, answer }) => {
@@ -180,6 +241,7 @@ socket.on('signal:answer', async ({ from, answer }) => {
 });
 
 socket.on('viewer:left', ({ viewerId }) => {
+  playLeaveSound();
   const pc = peerConnections.get(viewerId);
   if (pc) {
     pc.close();
@@ -225,10 +287,27 @@ btnConnect.onclick = async () => {
 
 const remoteVideo = document.getElementById('remote-video');
 const btnFullscreen = document.getElementById('btn-fullscreen');
+const btnReconnect = document.getElementById('btn-reconnect');
+const btnLeaveViewer = document.getElementById('btn-leave-viewer');
 let hostId = null;
 let hostPeerConnection = null;
 
+btnLeaveViewer.onclick = () => {
+  if (hostPeerConnection) {
+    hostPeerConnection.close();
+    hostPeerConnection = null;
+  }
+  remoteVideo.srcObject = null;
+  document.body.classList.remove('watching');
+  btnFullscreen.classList.add('hidden');
+  socket.emit('viewer:leave');
+  hostId = null;
+  setStatus('');
+  show(homeView);
+};
+
 socket.on('signal:offer', async ({ from, offer }) => {
+  if (hostPeerConnection) hostPeerConnection.close();
   hostId = from;
   hostPeerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
@@ -270,6 +349,18 @@ btnFullscreen.onclick = () => {
   }
 };
 
+btnReconnect.onclick = () => {
+  if (hostPeerConnection) {
+    hostPeerConnection.close();
+    hostPeerConnection = null;
+  }
+  remoteVideo.srcObject = null;
+  document.body.classList.remove('watching');
+  btnFullscreen.classList.add('hidden');
+  setStatus('Reconectando...');
+  socket.emit('viewer:reconnect');
+};
+
 socket.on('host:left', () => {
   setStatus('O host encerrou o compartilhamento.');
   remoteVideo.srcObject = null;
@@ -295,6 +386,7 @@ const btnVoiceLeave = document.getElementById('btn-voice-leave');
 const voiceVideoWrap = document.getElementById('voice-video-wrap');
 const voiceRemoteVideo = document.getElementById('voice-remote-video');
 const btnVoiceFullscreen = document.getElementById('btn-voice-fullscreen');
+const btnVoiceReconnect = document.getElementById('btn-voice-reconnect');
 const remoteAudioContainer = document.getElementById('remote-audio-container');
 
 let myId = null;
@@ -330,7 +422,7 @@ async function enterVoiceRoom(code, myName, id, participants, sharerId) {
   remoteAudioContainer.innerHTML = '';
   voiceVideoWrap.classList.add('hidden');
   btnVoiceFullscreen.classList.add('hidden');
-  btnMicToggle.textContent = 'Mutar microfone';
+  btnMicToggle.textContent = '🎙️ Mutar microfone';
   btnMicToggle.classList.remove('btn-stop');
   updateShareButton();
 
@@ -402,7 +494,21 @@ function createVoicePeerConnection(peerId) {
 }
 
 socket.on('voice:participant-joined', ({ id, name }) => {
+  playJoinSound();
   pendingNames.set(id, name);
+});
+
+socket.on('vsignal:reconnect-request', ({ from }) => {
+  // só quem está compartilhando a tela deve responder; se essa mensagem
+  // chegou aqui é porque quem pediu identificou este cliente como o dono
+  // atual do compartilhamento.
+  const oldEntry = voicePeers.get(from);
+  if (oldEntry) {
+    oldEntry.pc.close();
+    voicePeers.delete(from);
+  }
+  const pc = createVoicePeerConnection(from);
+  voicePeers.set(from, { name: pendingNames.get(from) || 'Convidado', pc });
 });
 
 socket.on('vsignal:offer', async ({ from, offer }) => {
@@ -436,6 +542,7 @@ socket.on('vsignal:ice', async ({ from, candidate }) => {
 });
 
 socket.on('voice:participant-left', ({ id }) => {
+  playLeaveSound();
   const entry = voicePeers.get(id);
   if (entry) {
     entry.pc.close();
@@ -471,7 +578,7 @@ btnMicToggle.onclick = () => {
   micStream.getAudioTracks().forEach((track) => {
     track.enabled = !micMuted;
   });
-  btnMicToggle.textContent = micMuted ? 'Ativar microfone' : 'Mutar microfone';
+  btnMicToggle.textContent = micMuted ? '🔇 Ativar microfone' : '🎙️ Mutar microfone';
   btnMicToggle.classList.toggle('btn-stop', micMuted);
 };
 
@@ -552,10 +659,10 @@ function clearVoiceVideo() {
 
 function updateShareButton() {
   if (isVoiceSharer) {
-    btnVoiceShare.textContent = 'Parar compartilhamento';
+    btnVoiceShare.textContent = '⏹️ Parar compartilhamento';
     btnVoiceShare.classList.add('btn-stop');
   } else {
-    btnVoiceShare.textContent = 'Compartilhar minha tela';
+    btnVoiceShare.textContent = '🖥️ Compartilhar minha tela';
     btnVoiceShare.classList.remove('btn-stop');
   }
 }
@@ -582,6 +689,19 @@ btnVoiceFullscreen.onclick = () => {
   } else if (voiceRemoteVideo.webkitRequestFullscreen) {
     voiceRemoteVideo.webkitRequestFullscreen();
   }
+};
+
+btnVoiceReconnect.onclick = () => {
+  if (!currentSharerId || currentSharerId === myId) return; // sou eu que compartilho, nada a reconectar
+
+  const entry = voicePeers.get(currentSharerId);
+  if (entry) {
+    entry.pc.close();
+    voicePeers.delete(currentSharerId);
+  }
+  voiceRemoteVideo.srcObject = null;
+  setStatus('Reconectando à transmissão...');
+  socket.emit('vsignal:reconnect-request', { to: currentSharerId });
 };
 
 btnVoiceLeave.onclick = () => {
