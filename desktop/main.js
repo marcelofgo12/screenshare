@@ -2,7 +2,7 @@ const { app, BrowserWindow, session, desktopCapturer, ipcMain } = require('elect
 const path = require('path');
 
 // >>> Troque pela URL do seu app publicado no Vercel <<<
-const APP_URL = 'https://SEU-APP.vercel.app';
+const APP_URL = 'https://screenshare-alpha.vercel.app/';
 
 let mainWindow = null;
 let pickerWindow = null;
