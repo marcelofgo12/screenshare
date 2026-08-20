@@ -125,23 +125,10 @@ socket.on('disconnect', () => {
   setStatus('Conexão com o servidor perdida. Tentando reconectar...', 'error');
 });
 
-// ----- Lembrar o nome digitado (localStorage) -----
-const NAME_STORAGE_KEY = 'screenshare_name';
-
-function getSavedName() {
-  try {
-    return localStorage.getItem(NAME_STORAGE_KEY) || '';
-  } catch (err) {
-    return '';
-  }
-}
-
-function saveName(name) {
-  try {
-    localStorage.setItem(NAME_STORAGE_KEY, name);
-  } catch (err) {
-    // localStorage indisponível (modo privado etc.) — sem problema, só não lembra da próxima vez
-  }
+// ----- Identidade da pessoa (sempre vem do login com Google, sem campo pra digitar) -----
+function currentIdentity() {
+  if (googleProfile) return { name: googleProfile.name, avatar: googleProfile.avatar };
+  return { name: 'Convidado', avatar: null };
 }
 
 // ----- Aviso para quem está no Safari do iPhone/iPad (não suporta compartilhar tela) -----
@@ -329,9 +316,6 @@ function handleGoogleCredential(response) {
   const payload = decodeGoogleJwt(response.credential);
   googleProfile = { name: payload.name || payload.given_name || 'Convidado', avatar: payload.picture || null };
   saveGoogleProfile(googleProfile);
-  saveName(googleProfile.name);
-  nameInput.value = googleProfile.name;
-  voiceNameInput.value = googleProfile.name;
   updateGoogleStatusUI();
   enterApp();
 }
@@ -584,17 +568,12 @@ socket.on('viewers:update', (viewers) => {
 // =====================================================================
 
 const btnConnect = document.getElementById('btn-connect');
-const nameInput = document.getElementById('name-input');
 const codeInput = document.getElementById('code-input');
-
-nameInput.value = getSavedName();
 
 btnConnect.onclick = async () => {
   const code = codeInput.value.trim().toUpperCase();
-  const name = nameInput.value.trim() || 'Convidado';
   if (!code) return;
-  saveName(name);
-  const avatar = googleProfile && googleProfile.name === name ? googleProfile.avatar : null;
+  const { name, avatar } = currentIdentity();
 
   const result = await emitAsync('room:join', { code, name, avatar });
   if (result.error) {
@@ -710,7 +689,6 @@ socket.on('host:left', () => {
 // =====================================================================
 
 const voiceRoomNameInput = document.getElementById('voice-room-name-input');
-const voiceNameInput = document.getElementById('voice-name-input');
 const voiceCustomCodeInput = document.getElementById('voice-custom-code-input');
 const btnVoiceCreateConfirm = document.getElementById('btn-voice-create-confirm');
 const voiceRoomNameDisplay = document.getElementById('voice-room-name-display');
@@ -785,14 +763,10 @@ function stopSpeakingLoop() {
   speakingIds = new Set();
 }
 
-voiceNameInput.value = getSavedName();
-
 btnVoiceCreateConfirm.onclick = async () => {
-  const name = voiceNameInput.value.trim() || 'Convidado';
   const customCode = voiceCustomCodeInput.value.trim();
   const roomName = voiceRoomNameInput.value.trim();
-  saveName(name);
-  const avatar = googleProfile && googleProfile.name === name ? googleProfile.avatar : null;
+  const { name, avatar } = currentIdentity();
 
   const result = await emitAsync('voice:create', { customCode, roomName, name, avatar });
   if (result.error) {
@@ -1140,8 +1114,6 @@ btnVoiceLeave.onclick = () => {
   if (stored) {
     googleProfile = stored;
     updateGoogleStatusUI();
-    nameInput.value = stored.name;
-    voiceNameInput.value = stored.name;
     enterApp();
   } else if (GOOGLE_CLIENT_ID.startsWith('SEU_CLIENT_ID')) {
     // sem Client ID configurado ainda: nao trava o uso do app
