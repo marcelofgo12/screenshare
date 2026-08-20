@@ -97,9 +97,125 @@ function show(view) {
   view.classList.remove('hidden');
 }
 
-function setStatus(msg) {
+function setStatus(msg, type = 'info') {
   statusEl.textContent = msg;
+  statusEl.classList.remove('status-error', 'status-success');
+  if (type === 'error') statusEl.classList.add('status-error');
+  if (type === 'success') statusEl.classList.add('status-success');
 }
+
+// ----- Estado da conexão com o servidor (avisa se o Render "acordar" demorar) -----
+let coldStartTimer = setTimeout(() => {
+  setStatus('O servidor gratuito pode estar "acordando" — isso pode levar até 1 minuto na primeira vez.');
+}, 4000);
+
+socket.on('connect', () => {
+  clearTimeout(coldStartTimer);
+  setStatus('');
+});
+
+socket.on('connect_error', () => {
+  setStatus('Não foi possível conectar ao servidor. Tentando novamente...', 'error');
+});
+
+socket.on('disconnect', () => {
+  setStatus('Conexão com o servidor perdida. Tentando reconectar...', 'error');
+});
+
+// ----- Lembrar o nome digitado (localStorage) -----
+const NAME_STORAGE_KEY = 'screenshare_name';
+
+function getSavedName() {
+  try {
+    return localStorage.getItem(NAME_STORAGE_KEY) || '';
+  } catch (err) {
+    return '';
+  }
+}
+
+function saveName(name) {
+  try {
+    localStorage.setItem(NAME_STORAGE_KEY, name);
+  } catch (err) {
+    // localStorage indisponível (modo privado etc.) — sem problema, só não lembra da próxima vez
+  }
+}
+
+// ----- Aviso para quem está no Safari do iPhone/iPad (não suporta compartilhar tela) -----
+const iosWarning = document.getElementById('ios-warning');
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+if (isIOS && !(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)) {
+  iosWarning.classList.remove('hidden');
+}
+
+// ----- Chat de texto (disponível durante compartilhamento simples e sala de voz) -----
+const chatPanel = document.getElementById('chat-panel');
+const btnChatToggle = document.getElementById('btn-chat-toggle');
+const chatBody = document.getElementById('chat-body');
+const chatMessages = document.getElementById('chat-messages');
+const chatForm = document.getElementById('chat-form');
+const chatInput = document.getElementById('chat-input');
+
+let chatUnread = 0;
+
+function showChatPanel() {
+  chatPanel.classList.remove('hidden');
+}
+
+function hideChatPanel() {
+  chatPanel.classList.add('hidden');
+  chatBody.classList.add('hidden');
+  chatMessages.innerHTML = '';
+  chatUnread = 0;
+  updateChatBadge();
+}
+
+function updateChatBadge() {
+  btnChatToggle.textContent = chatUnread > 0 ? `💬 Chat (${chatUnread})` : '💬 Chat';
+}
+
+btnChatToggle.onclick = () => {
+  chatBody.classList.toggle('hidden');
+  if (!chatBody.classList.contains('hidden')) {
+    chatUnread = 0;
+    updateChatBadge();
+    chatInput.focus();
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+};
+
+chatForm.onsubmit = (e) => {
+  e.preventDefault();
+  const text = chatInput.value.trim();
+  if (!text) return;
+  socket.emit('chat:message', { text });
+  chatInput.value = '';
+};
+
+socket.on('chat:message', ({ from, name, text, at }) => {
+  const isMine = from === socket.id;
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-msg' + (isMine ? ' mine' : '');
+
+  const meta = document.createElement('div');
+  meta.className = 'chat-meta';
+  const time = new Date(at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  meta.textContent = `${isMine ? 'Você' : name} · ${time}`;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble';
+  bubble.textContent = text;
+
+  wrap.appendChild(meta);
+  wrap.appendChild(bubble);
+  chatMessages.appendChild(wrap);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  if (chatBody.classList.contains('hidden') && !isMine) {
+    chatUnread++;
+    updateChatBadge();
+  }
+});
 
 btnHost.onclick = () => show(hostView);
 btnVoiceCreate.onclick = () => show(voiceCreateView);
@@ -150,7 +266,7 @@ async function startSharing() {
 
   const result = await emitAsync('host:create', { customCode });
   if (result.error) {
-    setStatus(result.error);
+    setStatus(result.error, 'error');
     return;
   }
   const code = result.code;
@@ -160,7 +276,7 @@ async function startSharing() {
     localVideo.srcObject = localStream;
   } catch (err) {
     socket.emit('host:stop');
-    setStatus('Não foi possível capturar a tela.');
+    setStatus('Não foi possível capturar a tela.', 'error');
     return;
   }
 
@@ -172,6 +288,7 @@ async function startSharing() {
   btnStartShare.classList.add('btn-stop');
   customCodeInput.disabled = true;
   renderViewers([]);
+  showChatPanel();
 
   localStream.getVideoTracks()[0].addEventListener('ended', () => {
     // usuário parou pela barra nativa do navegador, não pelo nosso botão
@@ -200,6 +317,7 @@ function stopSharing() {
   btnStartShare.classList.remove('btn-stop');
   customCodeInput.disabled = false;
   setStatus('Compartilhamento encerrado.');
+  hideChatPanel();
 }
 
 // ----- Lado HOST: cria (ou recria) a conexão com um espectador -----
@@ -225,7 +343,7 @@ async function createHostConnectionForViewer(viewerId) {
 
 socket.on('viewer:new', ({ viewerId }) => {
   playJoinSound();
-  setStatus('Espectador conectado.');
+  setStatus('Espectador conectado.', 'success');
   createHostConnectionForViewer(viewerId);
 });
 
@@ -261,23 +379,28 @@ const btnConnect = document.getElementById('btn-connect');
 const nameInput = document.getElementById('name-input');
 const codeInput = document.getElementById('code-input');
 
+nameInput.value = getSavedName();
+
 btnConnect.onclick = async () => {
   const code = codeInput.value.trim().toUpperCase();
   const name = nameInput.value.trim() || 'Convidado';
   if (!code) return;
+  saveName(name);
 
   const result = await emitAsync('room:join', { code, name });
   if (result.error) {
-    setStatus(result.error);
+    setStatus(result.error, 'error');
     return;
   }
 
   if (result.type === 'share') {
     show(viewerView);
-    setStatus('Conectado. Aguardando vídeo...');
+    setStatus('Conectado. Aguardando vídeo...', 'success');
+    showChatPanel();
   } else if (result.type === 'voice') {
     show(voiceRoomView);
     await enterVoiceRoom(code, name, result.id, result.participants, result.sharerId);
+    showChatPanel();
   }
 };
 
@@ -303,6 +426,7 @@ btnLeaveViewer.onclick = () => {
   socket.emit('viewer:leave');
   hostId = null;
   setStatus('');
+  hideChatPanel();
   show(homeView);
 };
 
@@ -315,7 +439,7 @@ socket.on('signal:offer', async ({ from, offer }) => {
     remoteVideo.srcObject = e.streams[0];
     document.body.classList.add('watching');
     btnFullscreen.classList.remove('hidden');
-    setStatus('Recebendo transmissão.');
+    setStatus('Recebendo transmissão.', 'success');
   };
 
   hostPeerConnection.onicecandidate = (e) => {
@@ -362,10 +486,11 @@ btnReconnect.onclick = () => {
 };
 
 socket.on('host:left', () => {
-  setStatus('O host encerrou o compartilhamento.');
+  setStatus('O host encerrou o compartilhamento.', 'error');
   remoteVideo.srcObject = null;
   document.body.classList.remove('watching');
   btnFullscreen.classList.add('hidden');
+  hideChatPanel();
 });
 
 // =====================================================================
@@ -398,18 +523,72 @@ let currentSharerId = null;
 const voicePeers = new Map(); // peerId -> { name, pc }
 const pendingNames = new Map(); // peerId -> name (de quem ainda não tem pc)
 
+// ----- Indicador de "quem está falando" (analisa o volume de cada stream de áudio) -----
+const speakingAnalysers = new Map(); // peerId -> { analyser, data }
+let speakingIds = new Set();
+let speakingInterval = null;
+
+function attachSpeakingAnalyser(peerId, stream) {
+  try {
+    const ctx = getAudioCtx();
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.6;
+    source.connect(analyser);
+    speakingAnalysers.set(peerId, { analyser, data: new Uint8Array(analyser.frequencyBinCount) });
+  } catch (err) {
+    console.error('Erro ao analisar volume do áudio', err);
+  }
+}
+
+function startSpeakingLoop() {
+  if (speakingInterval) return;
+  speakingInterval = setInterval(() => {
+    const next = new Set();
+    speakingAnalysers.forEach(({ analyser, data }, peerId) => {
+      analyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = (data[i] - 128) / 128;
+        sum += v * v;
+      }
+      if (Math.sqrt(sum / data.length) > 0.04) next.add(peerId);
+    });
+
+    const changed = next.size !== speakingIds.size || [...next].some((id) => !speakingIds.has(id));
+    if (changed) {
+      speakingIds = next;
+      renderVoiceParticipants(lastParticipants);
+    }
+  }, 200);
+}
+
+function stopSpeakingLoop() {
+  if (speakingInterval) {
+    clearInterval(speakingInterval);
+    speakingInterval = null;
+  }
+  speakingAnalysers.clear();
+  speakingIds = new Set();
+}
+
+voiceNameInput.value = getSavedName();
+
 btnVoiceCreateConfirm.onclick = async () => {
   const name = voiceNameInput.value.trim() || 'Convidado';
   const customCode = voiceCustomCodeInput.value.trim();
+  saveName(name);
 
   const result = await emitAsync('voice:create', { customCode, name });
   if (result.error) {
-    setStatus(result.error);
+    setStatus(result.error, 'error');
     return;
   }
 
   show(voiceRoomView);
   await enterVoiceRoom(result.code, name, result.id, [], null);
+  showChatPanel();
 };
 
 async function enterVoiceRoom(code, myName, id, participants, sharerId) {
@@ -429,20 +608,24 @@ async function enterVoiceRoom(code, myName, id, participants, sharerId) {
   voiceCodeDisplay.textContent = code;
   renderVoiceParticipants([{ id: myId, name: myName }, ...participants]);
   setStatus('Conectando ao microfone...');
+  stopSpeakingLoop();
 
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (err) {
-    setStatus('Não foi possível acessar o microfone.');
+    setStatus('Não foi possível acessar o microfone.', 'error');
     return;
   }
+
+  attachSpeakingAnalyser(myId, micStream);
+  startSpeakingLoop();
 
   participants.forEach(({ id: peerId, name }) => {
     const pc = createVoicePeerConnection(peerId);
     voicePeers.set(peerId, { name, pc });
   });
 
-  setStatus('Conectado à sala de voz.');
+  setStatus('Conectado à sala de voz.', 'success');
 }
 
 function createVoicePeerConnection(peerId) {
@@ -463,6 +646,7 @@ function createVoicePeerConnection(peerId) {
         remoteAudioContainer.appendChild(audioEl);
       }
       audioEl.srcObject = e.streams[0];
+      attachSpeakingAnalyser(peerId, e.streams[0]);
     } else if (e.track.kind === 'video') {
       voiceRemoteVideo.srcObject = e.streams[0];
       voiceVideoWrap.classList.remove('hidden');
@@ -551,6 +735,7 @@ socket.on('voice:participant-left', ({ id }) => {
   const audioEl = document.getElementById('audio-' + id);
   if (audioEl) audioEl.remove();
   pendingNames.delete(id);
+  speakingAnalysers.delete(id);
 });
 
 socket.on('voice:participants-update', ({ participants, sharerId }) => {
@@ -568,6 +753,7 @@ function renderVoiceParticipants(participants) {
     const li = document.createElement('li');
     const label = id === myId ? `${name} (você)` : name;
     li.textContent = id === currentSharerId ? `🖥️ ${label}` : label;
+    li.classList.toggle('speaking', speakingIds.has(id));
     voiceParticipantListEl.appendChild(li);
   });
 }
@@ -595,14 +781,14 @@ async function startVoiceShare() {
   try {
     stream = await navigator.mediaDevices.getDisplayMedia(SCREEN_CONSTRAINTS);
   } catch (err) {
-    setStatus('Não foi possível capturar a tela.');
+    setStatus('Não foi possível capturar a tela.', 'error');
     return;
   }
 
   const result = await emitAsync('voice:share-start', null);
   if (result.error) {
     stream.getTracks().forEach((track) => track.stop());
-    setStatus(result.error);
+    setStatus(result.error, 'error');
     return;
   }
 
@@ -707,6 +893,7 @@ btnVoiceReconnect.onclick = () => {
 btnVoiceLeave.onclick = () => {
   stopVoiceShare();
   clearVoiceVideo();
+  stopSpeakingLoop();
 
   voicePeers.forEach(({ pc }) => pc.close());
   voicePeers.clear();
@@ -722,5 +909,6 @@ btnVoiceLeave.onclick = () => {
   myId = null;
   currentSharerId = null;
   setStatus('');
+  hideChatPanel();
   show(homeView);
 };

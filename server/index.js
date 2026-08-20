@@ -196,6 +196,26 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ---- Chat de texto (funciona tanto no compartilhamento simples quanto na sala de voz) ----
+  socket.on('chat:message', ({ text }) => {
+    const code = socket.data.code;
+    if (!code) return;
+    const room = rooms.get(code);
+    if (!room) return;
+
+    const trimmed = (text || '').trim().slice(0, 500);
+    if (!trimmed) return;
+
+    let name = 'Convidado';
+    if (room.type === 'share') {
+      name = room.hostId === socket.id ? 'Host' : room.viewers.get(socket.id) || 'Convidado';
+    } else if (room.type === 'voice') {
+      name = room.participants.get(socket.id) || 'Convidado';
+    }
+
+    io.to(code).emit('chat:message', { from: socket.id, name, text: trimmed, at: Date.now() });
+  });
+
   // ---- Sinalizacao WebRTC do compartilhamento simples (1 host -> N espectadores) ----
   socket.on('signal:offer', ({ to, offer }) => {
     io.to(to).emit('signal:offer', { from: socket.id, offer });

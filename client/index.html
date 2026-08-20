@@ -4,6 +4,10 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ScreenShare</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#5b7cff" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -21,6 +25,9 @@
 
     <main class="card">
       <div id="home" class="view">
+        <div id="ios-warning" class="ios-warning hidden">
+          ⚠️ Pelo Safari no iPhone/iPad você só consegue assistir — compartilhar tela não é suportado nesse navegador.
+        </div>
         <div class="option-grid">
           <button id="btn-host" class="option-btn">
             <span class="option-icon">🖥️</span>
@@ -136,6 +143,17 @@
 
       <p id="status"></p>
     </main>
+
+    <div id="chat-panel" class="chat-panel hidden">
+      <button id="btn-chat-toggle" class="chat-toggle">💬 Chat</button>
+      <div id="chat-body" class="chat-body hidden">
+        <div id="chat-messages" class="chat-messages"></div>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" placeholder="Escreva uma mensagem…" maxlength="500" autocomplete="off" />
+          <button type="submit">Enviar</button>
+        </form>
+      </div>
+    </div>
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
