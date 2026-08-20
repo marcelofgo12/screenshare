@@ -31,6 +31,11 @@ const SCREEN_CONSTRAINTS = {
   audio: true
 };
 
+// >>> Cole aqui o Client ID do Google (Google Cloud Console > OAuth) para
+// habilitar o botão "Continuar com Google". Enquanto estiver com o valor
+// padrão abaixo, o botão simplesmente não aparece.
+const GOOGLE_CLIENT_ID = 'SEU_CLIENT_ID.apps.googleusercontent.com';
+
 const socket = io(SIGNALING_URL);
 
 function emitAsync(event, payload) {
@@ -148,41 +153,23 @@ if (isIOS && !(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)
   iosWarning.classList.remove('hidden');
 }
 
-// ----- Chat de texto (disponível durante compartilhamento simples e sala de voz) -----
+// ----- Chat de texto — painel embutido estilo canal de texto (disponível durante -----
+// ----- compartilhamento simples e sala de voz) -----
 const chatPanel = document.getElementById('chat-panel');
-const btnChatToggle = document.getElementById('btn-chat-toggle');
-const chatBody = document.getElementById('chat-body');
 const chatMessages = document.getElementById('chat-messages');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
 
-let chatUnread = 0;
-
 function showChatPanel() {
   chatPanel.classList.remove('hidden');
+  document.body.classList.add('chat-active');
 }
 
 function hideChatPanel() {
   chatPanel.classList.add('hidden');
-  chatBody.classList.add('hidden');
+  document.body.classList.remove('chat-active');
   chatMessages.innerHTML = '';
-  chatUnread = 0;
-  updateChatBadge();
 }
-
-function updateChatBadge() {
-  btnChatToggle.textContent = chatUnread > 0 ? `💬 Chat (${chatUnread})` : '💬 Chat';
-}
-
-btnChatToggle.onclick = () => {
-  chatBody.classList.toggle('hidden');
-  if (!chatBody.classList.contains('hidden')) {
-    chatUnread = 0;
-    updateChatBadge();
-    chatInput.focus();
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
-};
 
 chatForm.onsubmit = (e) => {
   e.preventDefault();
@@ -192,34 +179,115 @@ chatForm.onsubmit = (e) => {
   chatInput.value = '';
 };
 
-socket.on('chat:message', ({ from, name, text, at }) => {
+function colorFromName(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return `hsl(${Math.abs(hash) % 360}, 55%, 42%)`;
+}
+
+function buildAvatar(name, avatarUrl) {
+  if (avatarUrl) {
+    const img = document.createElement('img');
+    img.className = 'chat-avatar';
+    img.src = avatarUrl;
+    img.referrerPolicy = 'no-referrer';
+    img.alt = name;
+    return img;
+  }
+  const div = document.createElement('div');
+  div.className = 'chat-avatar chat-avatar-fallback';
+  div.style.background = colorFromName(name);
+  div.textContent = (name || '?').trim().charAt(0).toUpperCase();
+  return div;
+}
+
+socket.on('chat:message', ({ from, name, avatar, text, at }) => {
   const isMine = from === socket.id;
-  const wrap = document.createElement('div');
-  wrap.className = 'chat-msg' + (isMine ? ' mine' : '');
+  const displayName = isMine ? 'Você' : name;
+
+  const row = document.createElement('div');
+  row.className = 'chat-row' + (isMine ? ' mine' : '');
+  row.appendChild(buildAvatar(displayName, avatar));
+
+  const content = document.createElement('div');
+  content.className = 'chat-content';
 
   const meta = document.createElement('div');
   meta.className = 'chat-meta';
-  const time = new Date(at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  meta.textContent = `${isMine ? 'Você' : name} · ${time}`;
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'chat-name';
+  nameSpan.textContent = displayName;
+  const timeSpan = document.createElement('span');
+  timeSpan.className = 'chat-time';
+  timeSpan.textContent = new Date(at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  meta.appendChild(nameSpan);
+  meta.appendChild(timeSpan);
 
-  const bubble = document.createElement('div');
-  bubble.className = 'chat-bubble';
-  bubble.textContent = text;
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'chat-text';
+  bodyEl.textContent = text;
 
-  wrap.appendChild(meta);
-  wrap.appendChild(bubble);
-  chatMessages.appendChild(wrap);
+  content.appendChild(meta);
+  content.appendChild(bodyEl);
+  row.appendChild(content);
+
+  chatMessages.appendChild(row);
   chatMessages.scrollTop = chatMessages.scrollHeight;
-
-  if (chatBody.classList.contains('hidden') && !isMine) {
-    chatUnread++;
-    updateChatBadge();
-  }
 });
 
+// ----- "Continuar com Google" (Google Identity Services, sem backend próprio) -----
+let googleProfile = null; // { name, avatar }
+let activeNameInput = null;
+
+function decodeGoogleJwt(token) {
+  const payload = token.split('.')[1];
+  const json = decodeURIComponent(
+    atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
+      .split('')
+      .map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+      .join('')
+  );
+  return JSON.parse(json);
+}
+
+function handleGoogleCredential(response) {
+  const payload = decodeGoogleJwt(response.credential);
+  googleProfile = { name: payload.name || payload.given_name || 'Convidado', avatar: payload.picture || null };
+  if (activeNameInput) activeNameInput.value = googleProfile.name;
+}
+
+function setupGoogleButtons() {
+  if (GOOGLE_CLIENT_ID.startsWith('SEU_CLIENT_ID')) return;
+  if (!window.google || !window.google.accounts || !window.google.accounts.id) return;
+
+  window.google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: handleGoogleCredential
+  });
+
+  ['join-google-btn', 'voice-google-btn'].forEach((slotId) => {
+    const slot = document.getElementById(slotId);
+    if (!slot) return;
+    window.google.accounts.id.renderButton(slot, {
+      theme: 'filled_black',
+      size: 'large',
+      text: 'continue_with',
+      shape: 'pill'
+    });
+  });
+}
+
+window.addEventListener('load', setupGoogleButtons);
+
 btnHost.onclick = () => show(hostView);
-btnVoiceCreate.onclick = () => show(voiceCreateView);
-btnJoin.onclick = () => show(joinView);
+btnVoiceCreate.onclick = () => {
+  activeNameInput = voiceNameInput;
+  show(voiceCreateView);
+};
+btnJoin.onclick = () => {
+  activeNameInput = nameInput;
+  show(joinView);
+};
 
 document.querySelectorAll('[data-back]').forEach((btn) => {
   btn.onclick = () => {
@@ -386,8 +454,9 @@ btnConnect.onclick = async () => {
   const name = nameInput.value.trim() || 'Convidado';
   if (!code) return;
   saveName(name);
+  const avatar = googleProfile && googleProfile.name === name ? googleProfile.avatar : null;
 
-  const result = await emitAsync('room:join', { code, name });
+  const result = await emitAsync('room:join', { code, name, avatar });
   if (result.error) {
     setStatus(result.error, 'error');
     return;
@@ -579,8 +648,9 @@ btnVoiceCreateConfirm.onclick = async () => {
   const name = voiceNameInput.value.trim() || 'Convidado';
   const customCode = voiceCustomCodeInput.value.trim();
   saveName(name);
+  const avatar = googleProfile && googleProfile.name === name ? googleProfile.avatar : null;
 
-  const result = await emitAsync('voice:create', { customCode, name });
+  const result = await emitAsync('voice:create', { customCode, name, avatar });
   if (result.error) {
     setStatus(result.error, 'error');
     return;

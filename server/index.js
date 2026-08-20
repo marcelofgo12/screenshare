@@ -13,9 +13,16 @@ const io = new Server(server, {
 });
 
 // code -> room
-// share: { type: 'share', hostId, viewers: Map<socketId, name> }
-// voice: { type: 'voice', participants: Map<socketId, name>, sharerId: string|null }
+// share: { type: 'share', hostId, viewers: Map<socketId, { name, avatar }> }
+// voice: { type: 'voice', participants: Map<socketId, { name, avatar }>, sharerId: string|null }
 const rooms = new Map();
+
+function makeIdentity(name, avatar) {
+  return {
+    name: (name || '').trim().slice(0, 30) || 'Convidado',
+    avatar: typeof avatar === 'string' && avatar.startsWith('https://') ? avatar.slice(0, 500) : null
+  };
+}
 
 function generateCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -41,12 +48,12 @@ function resolveCode(customCode) {
 }
 
 function broadcastShareViewers(room) {
-  const viewers = Array.from(room.viewers, ([id, name]) => ({ id, name }));
+  const viewers = Array.from(room.viewers, ([id, v]) => ({ id, name: v.name }));
   io.to(room.hostId).emit('viewers:update', viewers);
 }
 
 function broadcastVoiceParticipants(code, room) {
-  const participants = Array.from(room.participants, ([id, name]) => ({ id, name }));
+  const participants = Array.from(room.participants, ([id, v]) => ({ id, name: v.name }));
   io.to(code).emit('voice:participants-update', { participants, sharerId: room.sharerId });
 }
 
@@ -108,8 +115,8 @@ io.on('connection', (socket) => {
       return;
     }
     const code = result.code;
-    const name = ((payload && payload.name) || '').trim().slice(0, 30) || 'Convidado';
-    rooms.set(code, { type: 'voice', participants: new Map([[socket.id, name]]), sharerId: null });
+    const identity = makeIdentity(payload && payload.name, payload && payload.avatar);
+    rooms.set(code, { type: 'voice', participants: new Map([[socket.id, identity]]), sharerId: null });
     socket.data.role = 'voice';
     socket.data.code = code;
     socket.join(code);
@@ -164,7 +171,7 @@ io.on('connection', (socket) => {
   });
 
   // ---- Entrada unificada: cliente so sabe o codigo, servidor decide o tipo ----
-  socket.on('room:join', ({ code, name }, cb) => {
+  socket.on('room:join', ({ code, name, avatar }, cb) => {
     const room = rooms.get(code);
     if (!room) {
       cb({ error: 'Codigo invalido ou sala encerrada.' });
@@ -172,26 +179,26 @@ io.on('connection', (socket) => {
     }
 
     if (room.type === 'share') {
-      const viewerName = (name || '').trim().slice(0, 30) || 'Convidado';
-      room.viewers.set(socket.id, viewerName);
+      const identity = makeIdentity(name, avatar);
+      room.viewers.set(socket.id, identity);
       socket.data.role = 'viewer';
       socket.data.code = code;
       socket.join(code);
       cb({ ok: true, type: 'share' });
-      io.to(room.hostId).emit('viewer:new', { viewerId: socket.id, name: viewerName });
+      io.to(room.hostId).emit('viewer:new', { viewerId: socket.id, name: identity.name });
       broadcastShareViewers(room);
       return;
     }
 
     if (room.type === 'voice') {
-      const participantName = (name || '').trim().slice(0, 30) || 'Convidado';
-      const existing = Array.from(room.participants, ([id, n]) => ({ id, name: n }));
-      room.participants.set(socket.id, participantName);
+      const identity = makeIdentity(name, avatar);
+      const existing = Array.from(room.participants, ([id, v]) => ({ id, name: v.name }));
+      room.participants.set(socket.id, identity);
       socket.data.role = 'voice';
       socket.data.code = code;
       socket.join(code);
       cb({ ok: true, type: 'voice', id: socket.id, participants: existing, sharerId: room.sharerId });
-      socket.to(code).emit('voice:participant-joined', { id: socket.id, name: participantName });
+      socket.to(code).emit('voice:participant-joined', { id: socket.id, name: identity.name });
       broadcastVoiceParticipants(code, room);
     }
   });
@@ -206,14 +213,20 @@ io.on('connection', (socket) => {
     const trimmed = (text || '').trim().slice(0, 500);
     if (!trimmed) return;
 
-    let name = 'Convidado';
+    let identity = { name: 'Convidado', avatar: null };
     if (room.type === 'share') {
-      name = room.hostId === socket.id ? 'Host' : room.viewers.get(socket.id) || 'Convidado';
+      identity = room.hostId === socket.id ? { name: 'Host', avatar: null } : room.viewers.get(socket.id) || identity;
     } else if (room.type === 'voice') {
-      name = room.participants.get(socket.id) || 'Convidado';
+      identity = room.participants.get(socket.id) || identity;
     }
 
-    io.to(code).emit('chat:message', { from: socket.id, name, text: trimmed, at: Date.now() });
+    io.to(code).emit('chat:message', {
+      from: socket.id,
+      name: identity.name,
+      avatar: identity.avatar,
+      text: trimmed,
+      at: Date.now()
+    });
   });
 
   // ---- Sinalizacao WebRTC do compartilhamento simples (1 host -> N espectadores) ----

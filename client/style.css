@@ -41,6 +41,18 @@ body {
   transition: max-width 0.2s ease;
 }
 
+.main-row {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  width: 100%;
+  align-items: stretch;
+}
+
+body.chat-active .app-shell {
+  max-width: 1060px;
+}
+
 body.watching {
   padding: 16px;
 }
@@ -58,6 +70,22 @@ body.watching main.card {
   background: transparent;
   border: none;
   box-shadow: none;
+}
+
+@media (min-width: 880px) {
+  body.chat-active .main-row {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  body.chat-active main.card {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  body.chat-active .chat-panel {
+    flex: 0 0 340px;
+  }
 }
 
 .app-header {
@@ -468,89 +496,102 @@ body.watching .video-wrap video {
   line-height: 1.5;
 }
 
-/* ----- Chat ----- */
+/* ----- Chat (estilo canal de texto) ----- */
 
 .chat-panel {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  width: 300px;
-  max-width: calc(100vw - 40px);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  z-index: 20;
-}
-
-.chat-toggle {
-  min-width: auto;
-  padding: 10px 16px;
-  border-radius: 999px;
-  box-shadow: var(--shadow);
-}
-
-.chat-body {
   width: 100%;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: min(70vh, 620px);
+}
+
+.chat-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
 }
 
 .chat-messages {
-  max-height: 320px;
-  min-height: 120px;
+  flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
 }
 
-.chat-msg {
+.chat-row {
+  display: flex;
+  gap: 12px;
+}
+
+.chat-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.chat-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.chat-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  align-items: flex-start;
-  max-width: 90%;
-}
-
-.chat-msg.mine {
-  align-items: flex-end;
-  align-self: flex-end;
+  gap: 3px;
+  min-width: 0;
 }
 
 .chat-meta {
-  font-size: 10.5px;
-  color: var(--text-muted);
-  padding: 0 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
-.chat-bubble {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 8px 12px;
+.chat-name {
+  font-weight: 600;
   font-size: 13.5px;
-  line-height: 1.4;
-  word-break: break-word;
+  color: var(--text);
 }
 
-.chat-msg.mine .chat-bubble {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+.chat-row.mine .chat-name {
+  color: var(--accent);
+}
+
+.chat-time {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.chat-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #dcdfe6;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .chat-form {
   display: flex;
   gap: 8px;
-  padding: 10px;
+  padding: 14px;
   border-top: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .chat-form input {
@@ -560,6 +601,17 @@ body.watching .video-wrap video {
 .chat-form button {
   min-width: auto;
   padding: 10px 16px;
+}
+
+/* ----- Botão do Google ----- */
+
+.google-btn-slot {
+  display: flex;
+  justify-content: center;
+}
+
+.google-btn-slot:empty {
+  display: none;
 }
 
 @media (max-width: 480px) {
@@ -572,8 +624,6 @@ body.watching .video-wrap video {
   }
 
   .chat-panel {
-    right: 12px;
-    bottom: 12px;
-    width: calc(100vw - 24px);
+    height: 60vh;
   }
 }
