@@ -34,7 +34,7 @@ const SCREEN_CONSTRAINTS = {
 // >>> Cole aqui o Client ID do Google (Google Cloud Console > OAuth) para
 // habilitar o botão "Continuar com Google". Enquanto estiver com o valor
 // padrão abaixo, o botão simplesmente não aparece.
-const GOOGLE_CLIENT_ID = 'SEU_CLIENT_ID.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '1050161941044-bq1252g2hh4rdqbu92ftjtp0sn3c3cdl.apps.googleusercontent.com';
 
 const socket = io(SIGNALING_URL);
 
